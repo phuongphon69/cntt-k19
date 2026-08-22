@@ -16,6 +16,7 @@ import {
   Sun,
   Moon,
   GraduationCap,
+  BarChart3,
 } from "lucide-react";
 import { SearchModal } from "./search-modal";
 import { PublicStudent, Subject } from "@/types";
@@ -69,6 +70,7 @@ export function Navbar() {
     { href: "/today", label: "Hôm nay", icon: Clock },
     { href: "/subjects", label: "Môn học", icon: BookOpen },
     { href: "/schedule", label: "Thời khóa biểu", icon: Calendar },
+    { href: "/stats", label: "Thống kê", icon: BarChart3 },
   ];
 
   return (

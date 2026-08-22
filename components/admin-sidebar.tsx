@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Menu,
   X,
+  BarChart3,
 } from "lucide-react";
 
 export function AdminSidebar() {
@@ -58,6 +59,7 @@ export function AdminSidebar() {
     { href: "/admin", label: "Tổng quan", icon: LayoutDashboard },
     { href: "/admin/attendance/zoom", label: "Điểm danh Zoom OCR", icon: Camera, highlight: true },
     { href: "/admin/attendance/manual", label: "Điểm danh thủ công", icon: CheckSquare },
+    { href: "/stats", label: "Thống kê Chuyên cần", icon: BarChart3 },
     { href: "/admin/students", label: "Quản lý Sinh viên", icon: Users },
     { href: "/admin/student-mapping", label: "Ghép SV (Mapping)", icon: UserCheck },
     { href: "/admin/subjects", label: "Quản lý Môn học", icon: BookOpen },
