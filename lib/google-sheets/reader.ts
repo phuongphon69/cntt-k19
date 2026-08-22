@@ -192,21 +192,62 @@ export async function getStudents(): Promise<Student[]> {
     }
   }
 
-  // Enrich with CNTT - K19 if available
+  // Enrich with and include any additional students from CNTT - K19
   const k19Matrix = await fetchSheetMatrix("CNTT - K19");
   if (k19Matrix.length > 0) {
-    for (const r of k19Matrix) {
-      const hoVa = String(r[1] || "").trim();
-      const ten = String(r[2] || "").trim();
+    for (let r = 0; r < k19Matrix.length; r++) {
+      const row = k19Matrix[r];
+      const sttRaw = String(row[0] || "").trim();
+      const hoVa = String(row[1] || "").trim();
+      const ten = String(row[2] || "").trim();
       if (!hoVa && !ten) continue;
-      const fn = normalizeVietnameseName(`${hoVa} ${ten}`);
-      const fnNoAccent = normalizeVietnameseNameWithoutAccent(fn);
+      if (
+        (hoVa.toUpperCase().includes("HỌ") && ten.toUpperCase().includes("TÊN")) ||
+        sttRaw.toUpperCase().includes("STT") ||
+        hoVa.toUpperCase().includes("HỌ VÀ TÊN")
+      ) {
+        continue;
+      }
 
-      const match = students.find((s) => s.normalizedNameNoAccent === fnNoAccent);
+      const fullName = normalizeVietnameseName(`${hoVa} ${ten}`);
+      const fnNoAccent = normalizeVietnameseNameWithoutAccent(fullName);
+      const studentId = fnNoAccent.replace(/\s+/g, "_");
+
+      const match = students.find((s) => s.normalizedNameNoAccent === fnNoAccent || s.id === studentId);
+      const dob = String(row[3] || "").trim();
+      const cccd = String(row[5] || "").trim();
+      const placeOfBirth = String(row[6] || "").trim();
+      const phone = String(row[9] || "").trim();
+      const studySystem = String(row[11] || "").trim();
+      const dateJoined = String(row[12] || "").trim();
+
       if (match) {
-        const cccd = String(r[5] || "").trim();
         if (cccd) match.cccd = cccd;
-        if (!match.dateOfBirth) match.dateOfBirth = String(r[3] || "").trim();
+        if (phone && !match.phone) match.phone = phone;
+        if (dob && !match.dateOfBirth) match.dateOfBirth = dob;
+        if (placeOfBirth && !match.placeOfBirth) match.placeOfBirth = placeOfBirth;
+        if (studySystem && !match.studySystem) match.studySystem = studySystem;
+        if (dateJoined && !match.dateJoinedGroup) match.dateJoinedGroup = dateJoined;
+      } else {
+        // Additional student from CNTT - K19 (e.g. students #36, #37, #38)
+        students.push({
+          id: studentId,
+          stt: !isNaN(parseInt(sttRaw, 10)) ? parseInt(sttRaw, 10) : students.length + 1,
+          fullName,
+          hoVa,
+          ten,
+          normalizedName: fullName,
+          normalizedNameNoAccent: fnNoAccent,
+          dateOfBirth: dob,
+          placeOfBirth,
+          phone,
+          cccd,
+          studySystem,
+          dateJoinedGroup: dateJoined,
+          active: true,
+          sourceSheet: "CNTT - K19",
+          sourceRow: r + 1,
+        });
       }
     }
   }
