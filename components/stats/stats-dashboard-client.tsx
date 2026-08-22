@@ -398,8 +398,13 @@ export function StatsDashboardClient({ report }: StatsDashboardClientProps) {
                               <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" title="Chuyên cần dưới 80%" />
                             )}
                           </Link>
-                          <div className="text-[10px] text-slate-400 mt-0.5">
-                            {s.student.dateOfBirth || "--"}
+                          <div className="text-[10px] text-slate-400 mt-0.5 space-y-0.5">
+                            <div>NS: {s.student.dateOfBirth || "--"}</div>
+                            {s.student.dateJoinedGroup && (
+                              <div className="text-indigo-600 dark:text-indigo-400 font-medium">
+                                Vào lớp: {s.student.dateJoinedGroup}
+                              </div>
+                            )}
                           </div>
                         </td>
 

@@ -45,6 +45,7 @@ export interface PublicStudent {
   fullName: string;
   studySystem?: string;
   dateOfBirth?: string;
+  dateJoinedGroup?: string;
   active?: boolean;
 }
 

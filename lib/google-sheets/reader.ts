@@ -227,7 +227,7 @@ export async function getStudents(): Promise<Student[]> {
         if (dob && !match.dateOfBirth) match.dateOfBirth = dob;
         if (placeOfBirth && !match.placeOfBirth) match.placeOfBirth = placeOfBirth;
         if (studySystem && !match.studySystem) match.studySystem = studySystem;
-        if (dateJoined && !match.dateJoinedGroup) match.dateJoinedGroup = dateJoined;
+        if (dateJoined) match.dateJoinedGroup = dateJoined;
       } else {
         // Additional student from CNTT - K19 (e.g. students #36, #37, #38)
         students.push({
@@ -266,6 +266,7 @@ export async function getPublicStudents(): Promise<PublicStudent[]> {
     fullName: s.fullName,
     studySystem: s.studySystem,
     dateOfBirth: s.dateOfBirth,
+    dateJoinedGroup: s.dateJoinedGroup,
     active: s.active,
   }));
 }

@@ -189,9 +189,17 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
                           </span>
                         )}
                       </Link>
-                      {rec.studySystem && (
-                        <span className="text-[10px] text-slate-400 font-normal">Hệ: {rec.studySystem}</span>
-                      )}
+                      <div className="text-[10px] text-slate-400 font-normal mt-0.5 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          {rec.dateOfBirth && <span>NS: {rec.dateOfBirth}</span>}
+                          {rec.studySystem && <span>Hệ: {rec.studySystem}</span>}
+                        </div>
+                        {rec.dateJoinedGroup && (
+                          <div className="text-indigo-600 dark:text-indigo-400 font-medium">
+                            Vào lớp: {rec.dateJoinedGroup}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     {/* Session Cells */}
