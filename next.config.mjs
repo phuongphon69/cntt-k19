@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    serverComponentsExternalPackages: ["googleapis", "bcryptjs"],
+    serverComponentsExternalPackages: ["googleapis", "bcryptjs", "tesseract.js"],
   },
 };
 
