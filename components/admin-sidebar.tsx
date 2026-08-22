@@ -57,6 +57,7 @@ export function AdminSidebar() {
 
   const menuItems = [
     { href: "/admin", label: "Tổng quan", icon: LayoutDashboard },
+    { href: "/admin/sync", label: "Đồng bộ Google Sheet", icon: RefreshCw },
     { href: "/admin/attendance/zoom", label: "Điểm danh Zoom OCR", icon: Camera, highlight: true },
     { href: "/admin/attendance/manual", label: "Điểm danh thủ công", icon: CheckSquare },
     { href: "/stats", label: "Thống kê Chuyên cần", icon: BarChart3 },
