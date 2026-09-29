@@ -49,7 +49,8 @@
     "TEST_DD_SUBJECT_1790678364931": 25,
     "TEST_DD_SUBJECT_1790678671753": 25,
     "TEST_DD_SUBJECT_1790678710650": 25,
-    "TEST_DD_SUBJECT_1790679357936": 25
+    "TEST_DD_SUBJECT_1790679357936": 25,
+    "TEST_DD_SUBJECT_1790681239717": 25
   },
   "customSubjects": [
     {
@@ -127,7 +128,7 @@
           "value": "P"
         }
       ],
-      "recordedAt": "2026-09-29T10:55:59.573Z"
+      "recordedAt": "2026-09-29T11:27:21.433Z"
     },
     {
       "sheetName": "DD KỸ THUẬT LẬP TRÌNH",
@@ -146,5 +147,5 @@
       "recordedAt": "2026-09-29T07:35:16.452Z"
     }
   ],
-  "lastSyncedAt": "2026-09-29T10:55:59.573Z"
+  "lastSyncedAt": "2026-09-29T11:27:21.433Z"
 }

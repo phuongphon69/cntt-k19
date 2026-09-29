@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getPublicStudents, getSubjects, getSchedule } from "@/lib/google-sheets/reader";
 import { formatDateVN, parseVNDate } from "@/lib/utils";
+import { ClassReminderNotification } from "@/components/class-reminder-notification";
 
 export const dynamic = "force-dynamic";
 
@@ -189,6 +190,12 @@ export default async function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Class Reminder Notification */}
+      <ClassReminderNotification
+        todayClasses={todayClasses}
+        upcomingClass={todayClass}
+      />
 
       {/* Live Today Class Card */}
       {todayClass && (

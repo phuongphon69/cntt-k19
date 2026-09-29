@@ -1,0 +1,30 @@
+ôi đã thực hiện đẩy toàn bộ mã nguồn mới nhất lên GitHub thành công cho bạn!
+
+Toàn bộ mã nguồn đã được đồng bộ lên kho lưu trữ GitHub của bạn tại: 👉 https://github.com/phuongphon69/cntt-k19 (nhánh main)
+
+💡 Giải Thích Cách Đẩy Mã Nguồn Lên GitHub (Để Bạn Nắm Được Cho Lần Sau)
+Khi bạn có chỉnh sửa mã nguồn trên máy tính, chỉ cần mở Terminal (PowerShell/CMD) tại thư mục dự án và chạy 3 lệnh sau:
+
+bash
+# Bước 1: Chọn tất cả các file vừa tạo hoặc sửa đổi
+git add .
+# Bước 2: Đóng gói và ghi chú nội dung bạn vừa làm
+git commit -m "Cập nhật tính năng mới"
+# Bước 3: Đẩy toàn bộ lên GitHub
+git push origin main
+(Hiện tại tôi đã chạy toàn bộ các lệnh trên, kho GitHub của bạn đã ở trạng thái mới nhất 100%).
+
+🚀 Bước Tiếp Theo: Đưa Lên Mạng Hoạt Động (Deploy Lên Vercel Chỉ Với 3 Phút)
+Bây giờ mã nguồn đã có trên GitHub, việc đưa lên mạng miễn phí cực kỳ đơn giản:
+
+Truy cập Vercel.com $\rightarrow$ Đăng nhập bằng tài khoản GitHub.
+Bấm nút "Add New..." ở góc phải $\rightarrow$ Chọn "Project".
+Bạn sẽ thấy ngay repository phuongphon69/cntt-k19 xuất hiện $\rightarrow$ Bấm nút "Import" bên cạnh.
+Mở rộng mục Environment Variables (Biến môi trường) và dán các thông số:
+GOOGLE_SHEET_ID: 1nXlSGJq9DlsHsf4YFkw4ZiqQpZ2y8b4_h_EiHbhX9ec
+GOOGLE_SERVICE_ACCOUNT_EMAIL: (Email Service Account Google Sheet của bạn)
+GOOGLE_PRIVATE_KEY: (Private Key Google Sheet của bạn)
+AUTH_SECRET: cntt-k19-super-secret-key-change-in-production-2026
+ADMIN_PASSWORD: admin123 (hoặc mật khẩu admin bạn muốn đặt)
+Bấm nút "Deploy".
+Sau 1–2 phút, Vercel sẽ cung cấp đường link website chính thức (ví dụ: https://cntt-k19.vercel.app) để bạn gửi cho cả lớp sử dụng!

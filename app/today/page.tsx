@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getSchedule } from "@/lib/google-sheets/reader";
 import { formatDateVN, parseVNDate } from "@/lib/utils";
+import { ClassReminderNotification } from "@/components/class-reminder-notification";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,12 @@ export default async function TodayPage() {
           <ChevronRight className="w-4 h-4" />
         </Link>
       </div>
+
+      {/* Class Reminder Notification Component */}
+      <ClassReminderNotification
+        todayClasses={todayClasses}
+        upcomingClass={todayClasses[0] || upcomingClasses[0]}
+      />
 
       {/* Today's Classes List */}
       {todayClasses.length > 0 ? (
