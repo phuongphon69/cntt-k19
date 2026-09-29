@@ -38,13 +38,40 @@ export async function POST(req: NextRequest) {
     // Process uploaded images
     for (const file of files) {
       if (file && file.size > 0) {
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const ocrRes = await ocrProvider.recognize(buffer, file.type);
-        if (ocrRes.fullText) {
-          ocrTexts.push(ocrRes.fullText);
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const ocrRes = await ocrProvider.recognize(buffer, file.type);
+          if (ocrRes.fullText) {
+            ocrTexts.push(ocrRes.fullText);
+          }
+        } catch (imgErr: any) {
+          // If NO_OCR_API error (no image processing configured), propagate clearly
+          if (imgErr.message?.startsWith("NO_OCR_API")) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: imgErr.message.replace("NO_OCR_API: ", ""),
+                noApiConfigured: true,
+              },
+              { status: 422 }
+            );
+          }
+          console.error(`OCR failed for file ${file.name}:`, imgErr?.message || imgErr);
+          // Continue processing other images if one fails
         }
       }
+    }
+
+    if (ocrTexts.length === 0 && files.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Không thể nhận diện văn bản từ ảnh. Vui lòng: (1) cấu hình GEMINI_API_KEY, hoặc (2) dán trực tiếp danh sách tên vào ô văn bản bên dưới.",
+        },
+        { status: 400 }
+      );
     }
 
     if (ocrTexts.length === 0) {

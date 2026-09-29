@@ -92,6 +92,8 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
   const [files, setFiles] = useState<File[]>([]);
   const [rawText, setRawText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [noApiConfigured, setNoApiConfigured] = useState(false);
   const [ocrSummary, setOcrSummary] = useState<OcrResultSummary | null>(null);
   const [candidates, setCandidates] = useState<OcrCandidate[]>([]);
   const [showUnmatchedModal, setShowUnmatchedModal] = useState(false);
@@ -119,6 +121,8 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
 
     setLoading(true);
     setSuccessMessage("");
+    setOcrError(null);
+    setNoApiConfigured(false);
     try {
       const formData = new FormData();
       formData.append("sheetName", selectedSubjectSheet);
@@ -138,10 +142,11 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         setOcrSummary(data.summary);
         setCandidates(data.summary.candidates || []);
       } else {
-        alert("Lỗi xử lý OCR: " + data.error);
+        setOcrError(data.error || "Lỗi xử lý OCR");
+        if (data.noApiConfigured) setNoApiConfigured(true);
       }
     } catch (err: any) {
-      alert("Lỗi kết nối khi gửi ảnh OCR");
+      setOcrError("Lỗi kết nối máy chủ. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -495,6 +500,42 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
             />
           </div>
 
+          {/* OCR Error Banner */}
+          {ocrError && (
+            <div className={`p-4 rounded-2xl border text-sm space-y-2 ${
+              noApiConfigured
+                ? "bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+                : "bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-800 text-red-900 dark:text-red-200"
+            }`}>
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="space-y-2 flex-1">
+                  <p className="font-semibold">{ocrError}</p>
+                  {noApiConfigured && (
+                    <div className="text-xs space-y-1.5 pl-1">
+                      <p className="font-bold text-amber-800 dark:text-amber-300">👉 Cách khắc phục nhanh:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-amber-700 dark:text-amber-300">
+                        <li>Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="font-bold underline">aistudio.google.com/app/apikey</a> → Tạo API key miễn phí</li>
+                        <li>Thêm vào Vercel: Settings → Environment Variables → <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">GEMINI_API_KEY</code> = (key vừa tạo)</li>
+                        <li>Redeploy lại Vercel</li>
+                      </ol>
+                      <p className="text-amber-600 dark:text-amber-400 font-medium mt-2">
+                        ⚡ Hoặc dán trực tiếp danh sách tên vào ô văn bản bên trên để điểm danh ngay mà không cần API!
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setOcrError(null); setNoApiConfigured(false); }}
+                  className="text-xs opacity-60 hover:opacity-100 shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Submit Action */}
           <button
             type="submit"
@@ -516,6 +557,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         </form>
         </div>
       )}
+
 
       {/* Step 2: OCR Review & Matching Table */}
       {ocrSummary && (
