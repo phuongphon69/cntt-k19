@@ -27,15 +27,29 @@ export function formatDateVN(dateStr?: string | Date): string {
 
 export function parseVNDate(dateStr?: string): Date | null {
   if (!dateStr) return null;
-  const parts = dateStr.trim().split(/[/.-]/);
-  if (parts.length === 3) {
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    let year = parseInt(parts[2], 10);
+  const str = String(dateStr).trim();
+
+  // 1. Match dd/mm/yyyy or dd-mm-yyyy or dd.mm.yyyy (e.g. from "11/05/2026" or "02/02/2026 và 27/03/2026")
+  const match = str.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    let year = parseInt(match[3], 10);
     if (year < 100) year += 2000;
-    const date = new Date(year, month, day);
+    const date = new Date(year, month, day, 0, 0, 0, 0);
     if (!isNaN(date.getTime())) return date;
   }
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
+
+  // 2. Match ISO yyyy-mm-dd
+  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    const date = new Date(year, month, day, 0, 0, 0, 0);
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // DO NOT fallback to new Date(str) because "12" or "Buổi 2" will be incorrectly parsed as month in 2001
+  return null;
 }

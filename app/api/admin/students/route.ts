@@ -50,19 +50,23 @@ export async function POST(req: NextRequest) {
           hoVa,
           ten,
           dateOfBirth || "",
-          placeOfBirth || "",
-          "",
-          "",
-          phone || "",
-          "CNTT",
-          studySystem || "CQ",
-          dateJoinedGroup || new Date().toLocaleDateString("vi-VN"),
-          notes || "",
+          "", // GIỚI TÍNH
+          cccd || "", // SỐ CCCD
+          placeOfBirth || "", // NƠI SINH
+          "", // ĐÃ TỐT NGHIỆP VĂN BẰNG VÀ NGÀNH HỌC
+          "", // NGÀY THÁNG NĂM TỐT NGHIỆP
+          phone || "", // SỐ ĐIỆN THOẠI SV
+          "CNTT", // NGÀNH ĐĂNG KÝ HỌC
+          studySystem || "CQ", // HỆ HỌC
+          dateJoinedGroup || new Date().toLocaleDateString("vi-VN"), // NGÀY VÀO NHÓM LỚP
+          "X", // A. Miền Bắc
+          "", // B. Miền Nam
+          notes || "", // GHI CHÚ
         ];
 
         await client.spreadsheets.values.append({
           spreadsheetId,
-          range: "'DANH SÁCH LỚP'!A:L",
+          range: "'CNTT - K19'!A:P",
           valueInputOption: "USER_ENTERED",
           requestBody: {
             values: [rowData],

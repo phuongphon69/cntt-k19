@@ -68,6 +68,18 @@ export interface Subject {
   // Computed summary
   recordedSessionsCount?: number;
   averageAttendanceRate?: number;
+  isFromTkb?: boolean;
+  hasSheet?: boolean;
+  tkbSessionsCount?: number;
+  enrolledStudentsCount?: number; // e.g. 24
+  totalClassStudents?: number; // e.g. 43 (class size CNTT - K19)
+  sessionDates?: SubjectSessionDate[]; // session dates from TKB/sheet
+}
+
+export interface SubjectSessionDate {
+  index: number;
+  date: string;
+  dayOfWeek?: string;
 }
 
 export interface AttendanceSession {
@@ -90,6 +102,7 @@ export interface StudentAttendanceRecord {
   studySystem?: string;
   dateJoinedGroup?: string;
   isApplicable: boolean; // false if student was not in this subject sheet or joined after date
+  missedLateJoinCount?: number; // Number of sessions missed due to entering class late
   sessions: {
     [date: string]: {
       round1: AttendanceValue;
@@ -122,6 +135,10 @@ export interface ScheduleItem {
   endPeriod: number;
   startTime: string; // HH:mm
   endTime: string; // HH:mm
+  sessionNumber?: number; // 1 (Buổi 1), 2 (Buổi 2)... cumulative per subject from top to bottom
+  totalSessionsForSubject?: number; // total sessions for this subject
+  hasExplicitPeriod?: boolean;
+  shiftName?: string; // e.g. "Ca tối"
   room?: string;
   teacher?: string;
   teacherPhone?: string;

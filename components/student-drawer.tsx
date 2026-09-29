@@ -17,6 +17,10 @@ export interface SessionDetailData {
   rate: number;
   displayText: string;
   isRecorded: boolean;
+  isLateJoinMissed?: boolean;
+  isAbsent?: boolean;
+  isFullAttendance?: boolean;
+  note?: string;
 }
 
 interface StudentDrawerProps {
@@ -60,6 +64,10 @@ export function StudentDrawer({ data, onClose }: StudentDrawerProps) {
     );
   }
 
+  const is0of3 = !data.isRecorded || data.rate === 0;
+  const is1of3 = !is0of3 && data.rate < 66; // 1/3
+  const isFullAttended = !is0of3 && data.rate >= 66; // 2/3 hoặc 3/3
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
@@ -95,33 +103,111 @@ export function StudentDrawer({ data, onClose }: StudentDrawerProps) {
 
         {/* Content */}
         <div className="p-5 space-y-4">
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Chi tiết các lần điểm danh trong buổi
-            </h4>
-            <div className="space-y-2">
-              {renderRoundRow("Lần 1", data.round1)}
-              {renderRoundRow("Lần 2", data.round2)}
-              {renderRoundRow("Lần 3", data.round3)}
+          {data.isLateJoinMissed ? (
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+              <div className="font-bold text-sm flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>Trạng thái: Thiếu buổi (Vào lớp sau)</span>
+              </div>
+              <p className="leading-relaxed">
+                {data.note || "Buổi học này diễn ra trước ngày học viên vào nhóm lớp, nên được ghi nhận là Thiếu buổi (không bị tính là vắng, không làm giảm tỷ lệ chuyên cần)."}
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Chi tiết các lần điểm danh trong buổi
+              </h4>
+              <div className="space-y-2">
+                {renderRoundRow("Lần 1", data.round1)}
+                {renderRoundRow("Lần 2", data.round2)}
+                {renderRoundRow("Lần 3", data.round3)}
+              </div>
+            </div>
+          )}
 
           {/* Session Summary Card */}
-          <div className="p-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-                Tổng kết buổi học
+          {data.isLateJoinMissed ? (
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  Tổng kết buổi học
+                </div>
+                <div className="text-xs text-amber-700/80 dark:text-amber-400 mt-0.5">
+                  Thiếu buổi (vào lớp sau ngày học)
+                </div>
               </div>
-              <div className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                {data.isRecorded ? `Tỷ lệ có mặt: ${data.rate}%` : "Chưa có dữ liệu"}
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-                {data.displayText}
+              <span className="text-lg font-black text-amber-700 dark:text-amber-300">
+                Thiếu buổi
               </span>
             </div>
-          </div>
+          ) : is0of3 ? (
+            <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-rose-500"></span>
+                    <span>Tổng kết buổi học: Vắng mặt</span>
+                  </div>
+                  <div className="text-xs text-rose-600/90 dark:text-rose-400 mt-0.5">
+                    Có mặt: 0/3 lần điểm danh (0%)
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300/80 dark:border-rose-800">
+                    0/3 • Vắng mặt
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-rose-700/80 dark:text-rose-300 leading-relaxed border-t border-rose-200/60 dark:border-rose-900/60 pt-2">
+                * Trường hợp 0/3 cũng là vắng mặt. Học viên không có mặt lần nào trong 3 lần điểm danh của buổi học này.
+              </p>
+            </div>
+          ) : is1of3 ? (
+            <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-rose-500"></span>
+                    <span>Tổng kết buổi học: Vắng mặt</span>
+                  </div>
+                  <div className="text-xs text-rose-600/90 dark:text-rose-400 mt-0.5">
+                    Có mặt: 1/3 lần điểm danh ({data.rate}%)
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300/80 dark:border-rose-800">
+                    1/3 • Vắng mặt
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-rose-700/80 dark:text-rose-300 leading-relaxed border-t border-rose-200/60 dark:border-rose-900/60 pt-2">
+                * Quy định: Cần có mặt từ 2/3 lần điểm danh trở lên mới được tính là có tham gia học đầy đủ. Trường hợp 1/3 được tính là vắng mặt buổi học này.
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Tổng kết buổi học: Có tham gia học đầy đủ</span>
+                  </div>
+                  <div className="text-xs text-emerald-700/80 dark:text-emerald-400 mt-0.5">
+                    Tỷ lệ có mặt: {data.displayText || `${data.rate}%`} ({data.rate}%)
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300/80 dark:border-emerald-800">
+                    {data.displayText || "2/3"} • Đầy đủ
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300 leading-relaxed border-t border-emerald-200/60 dark:border-emerald-900/60 pt-2">
+                * Đạt điều kiện: Có mặt từ 2/3 lần điểm danh trở lên được tính ngày đó có tham gia học đầy đủ.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

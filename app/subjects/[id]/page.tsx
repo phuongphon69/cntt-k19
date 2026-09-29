@@ -57,6 +57,11 @@ export default async function SubjectDetailPage({ params }: SubjectDetailPagePro
               Giảng viên: {subject.teacher}
             </span>
             <span>•</span>
+            <span className="flex items-center gap-1.5 font-semibold text-indigo-600 dark:text-indigo-400">
+              <BookOpen className="w-4 h-4" />
+              Sĩ số: {attendanceData.records.length}/{attendanceData.totalClassStudents || subject.totalClassStudents || 43} học sinh
+            </span>
+            <span>•</span>
             <span className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-slate-400" />
               Quy mô: {subject.totalSessions} buổi ({attendanceData.sessions.length} buổi đã lên lịch)

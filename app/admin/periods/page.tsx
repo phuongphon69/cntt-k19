@@ -17,9 +17,9 @@ export default function AdminPeriodsPage() {
     { id: "tiet-8", periodNumber: 8, name: "Tiết 8", startTime: "14:40", endTime: "15:25", sortOrder: 8, active: true },
     { id: "tiet-9", periodNumber: 9, name: "Tiết 9", startTime: "15:35", endTime: "16:20", sortOrder: 9, active: true },
     { id: "tiet-10", periodNumber: 10, name: "Tiết 10", startTime: "16:25", endTime: "17:10", sortOrder: 10, active: true },
-    { id: "tiet-11", periodNumber: 11, name: "Tiết 11", startTime: "18:00", endTime: "18:45", sortOrder: 11, active: true },
-    { id: "tiet-12", periodNumber: 12, name: "Tiết 12", startTime: "18:50", endTime: "19:35", sortOrder: 12, active: true },
-    { id: "tiet-13", periodNumber: 13, name: "Tiết 13", startTime: "19:40", endTime: "20:25", sortOrder: 13, active: true },
+    { id: "tiet-11", periodNumber: 11, name: "Tiết 11", startTime: "19:00", endTime: "19:45", sortOrder: 11, active: true },
+    { id: "tiet-12", periodNumber: 12, name: "Tiết 12", startTime: "19:50", endTime: "20:35", sortOrder: 12, active: true },
+    { id: "tiet-13", periodNumber: 13, name: "Tiết 13", startTime: "20:45", endTime: "21:30", sortOrder: 13, active: true },
     { id: "tiet-14", periodNumber: 14, name: "Tiết 14", startTime: "20:30", endTime: "21:15", sortOrder: 14, active: true },
   ]);
 

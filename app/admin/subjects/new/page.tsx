@@ -72,7 +72,7 @@ export default function NewSubjectPage() {
           Thêm Môn học Mới
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Hệ thống sẽ tự động nhân bản sheet <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">MẪU MÔN HỌC</code> và nạp danh sách học viên Active từ <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">DANH SÁCH LỚP</code>.
+          Hệ thống sẽ tự động nhân bản sheet <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">MẪU MÔN HỌC</code> và nạp danh sách học viên Active từ <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">CNTT - K19</code>.
         </p>
       </div>
 

@@ -56,6 +56,10 @@ export default async function SubjectsPage() {
                       <span>Giảng viên: <strong className="text-slate-700 dark:text-slate-300">{sub.teacher}</strong></span>
                     </div>
                     <div className="flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Sĩ số: <strong className="text-slate-700 dark:text-slate-300">{sub.enrolledStudentsCount || 24}/{sub.totalClassStudents || 43} học sinh</strong></span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <Calendar className="w-3.5 h-3.5 text-slate-400" />
                       <span>Số buổi: {sub.totalSessions} buổi</span>
                     </div>

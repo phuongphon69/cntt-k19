@@ -1,11 +1,15 @@
 // app/api/subjects/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSubjects } from "@/lib/google-sheets/reader";
+import { invalidateCache } from "@/lib/google-sheets/cache";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    if (req.nextUrl.searchParams.get("fresh") === "true") {
+      invalidateCache();
+    }
     const subjects = await getSubjects();
     return NextResponse.json({ success: true, subjects });
   } catch (error: any) {

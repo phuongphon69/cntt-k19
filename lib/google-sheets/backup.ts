@@ -1,0 +1,513 @@
+// lib/google-sheets/backup.ts
+import fs from "fs";
+import path from "path";
+import { getStudents, getSubjects, getWorkbookSheetNames, fetchSheetMatrix } from "./reader";
+import { getComprehensiveAttendanceReport, StudentComprehensiveStat } from "@/lib/attendance/stats";
+import { getRecordedAttendanceRounds, RecordedAttendanceRound } from "./sync-store";
+import { getGoogleSheetsClient, getSpreadsheetId } from "./client";
+import { invalidateCache, updateSyncTimestamp } from "./cache";
+import { logAuditEvent } from "./writer";
+
+const BACKUP_DIR = path.join(process.cwd(), "data", "backups");
+const HISTORY_FILE = path.join(BACKUP_DIR, "history.json");
+
+export interface BackupRecord {
+  id: string;
+  timestamp: string;
+  formattedTime: string;
+  adminUser: string;
+  studentsCount: number;
+  subjectsCount: number;
+  roundsCount: number;
+  writtenToGoogleSheets: boolean;
+  destinationSheet: string;
+  status: "SUCCESS" | "PARTIAL" | "SAVED_LOCAL";
+  message: string;
+}
+
+function ensureBackupDir() {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+}
+
+export function getBackupHistory(): BackupRecord[] {
+  ensureBackupDir();
+  try {
+    if (!fs.existsSync(HISTORY_FILE)) {
+      return [];
+    }
+    const raw = fs.readFileSync(HISTORY_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn("[getBackupHistory] Failed to read history:", e);
+    return [];
+  }
+}
+
+function saveBackupRecord(record: BackupRecord) {
+  ensureBackupDir();
+  try {
+    const list = getBackupHistory();
+    list.unshift(record);
+    // Keep last 50 backups
+    const trimmed = list.slice(0, 50);
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(trimmed, null, 2), "utf-8");
+  } catch (e) {
+    console.warn("[saveBackupRecord] Failed to save history:", e);
+  }
+}
+
+/**
+ * Perform a complete backup of attendance results to Google Sheets:
+ * 1. Collects all student attendance statistics across all subjects.
+ * 2. Writes/updates the dedicated sheet "SAO_LUU_DIEM_DANH" in Google Sheets.
+ * 3. Also updates all recorded rounds into their corresponding "DD <MÔN>" sheets.
+ * 4. Saves a timestamped snapshot locally.
+ */
+export async function performGoogleSheetBackup(adminUser = "admin"): Promise<{
+  success: boolean;
+  backupId: string;
+  timestamp: string;
+  studentsCount: number;
+  subjectsCount: number;
+  roundsCount: number;
+  writtenToGoogleSheets: boolean;
+  destinationSheet: string;
+  message: string;
+}> {
+  ensureBackupDir();
+  const timestamp = new Date().toISOString();
+  const backupId = `backup-${Date.now()}`;
+  const formattedTime = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+
+  // 1. Gather all attendance data
+  const students = await getStudents();
+  const subjects = await getSubjects();
+  const report = await getComprehensiveAttendanceReport();
+  const recordedRounds = getRecordedAttendanceRounds();
+
+  // 2. Prepare 2D matrix data for Google Sheets "SAO_LUU_DIEM_DANH"
+  const matrixData: (string | number)[][] = [];
+
+  // Title & Metadata Header
+  matrixData.push(["BẢNG SAO LƯU KẾT QUẢ ĐIỂM DANH - LỚP CNTT K19 CĐ"]);
+  matrixData.push([
+    "Thời gian sao lưu:",
+    formattedTime,
+    "Người thực hiện:",
+    adminUser,
+    "Sĩ số lớp:",
+    `${students.length} học viên`,
+    "Số môn học:",
+    `${subjects.length} môn`,
+  ]);
+  matrixData.push([]); // blank row
+
+  // Table Columns Header
+  const headerRow: string[] = [
+    "STT",
+    "Mã SV",
+    "Họ và tên",
+    "Ngày sinh",
+    "Hệ đào tạo",
+    "Ngày vào lớp",
+  ];
+
+  for (const sub of subjects) {
+    headerRow.push(`${sub.name} (Buổi)`);
+    headerRow.push(`${sub.name} (%)`);
+  }
+
+  headerRow.push("Tổng buổi tham gia");
+  headerRow.push("Tổng buổi áp dụng");
+  headerRow.push("Tỷ lệ chuyên cần chung (%)");
+  headerRow.push("Tình trạng");
+  headerRow.push("Cảnh báo");
+
+  matrixData.push(headerRow);
+
+  // Rows for each student
+  report.studentStats.forEach((sStat, idx) => {
+    const stu = sStat.student;
+    const row: (string | number)[] = [
+      idx + 1,
+      stu.id,
+      stu.fullName,
+      stu.dateOfBirth || "",
+      stu.studySystem || "",
+      stu.dateJoinedGroup || "",
+    ];
+
+    for (const sub of subjects) {
+      const subStat = sStat.subjects.find((s) => s.subjectId === sub.id || s.sheetName === sub.attendanceSheet);
+      if (!subStat) {
+        row.push("--");
+        row.push("--");
+      } else if (!subStat.isApplicable) {
+        row.push("--");
+        row.push("--");
+      } else {
+        row.push(subStat.sessionFraction || `${subStat.attendedSessions}/${subStat.totalSessionsInSheet}`);
+        row.push(subStat.recordedSessions > 0 ? `${subStat.attendanceRate}%` : "--");
+      }
+    }
+
+    row.push(sStat.totalAttendedSessionsAll);
+    row.push(sStat.totalSessionsAll);
+    row.push(`${sStat.overallAttendanceRate}%`);
+    row.push(
+      sStat.overallAttendanceRate >= 80
+        ? "Đạt chuẩn"
+        : sStat.totalSessionsAll === 0
+        ? "Chưa học"
+        : "Cần cải thiện"
+    );
+    row.push(sStat.overallWarning ? "CẢNH BÁO" : "Bình thường");
+
+    matrixData.push(row);
+  });
+
+  // Summary Row at bottom
+  matrixData.push([]);
+  matrixData.push([
+    "TỔNG KẾT TOÀN LỚP",
+    "",
+    `Tổng số học viên: ${students.length}`,
+    "",
+    "",
+    "",
+    ...subjects.flatMap(() => ["", ""]),
+    `Tỷ lệ TB lớp: ${report.averageClassAttendanceRate}%`,
+    "",
+    `Học viên cần lưu ý: ${report.warningStudentsCount}`,
+  ]);
+
+  // 3. Write to Google Sheets if API client is available or call Apps Script Webhook
+  let writtenToGoogleSheets = false;
+  const spreadsheetId = getSpreadsheetId();
+  const client = getGoogleSheetsClient();
+  const destinationSheet = "SAO_LUU_DIEM_DANH";
+
+  if (client) {
+    try {
+      // Check if sheet exists, if not create it
+      const meta = await client.spreadsheets.get({ spreadsheetId });
+      const sheetExists = meta.data.sheets?.some(
+        (s) => s.properties?.title?.trim().toUpperCase() === destinationSheet
+      );
+
+      if (!sheetExists) {
+        await client.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: destinationSheet,
+                    gridProperties: {
+                      rowCount: Math.max(100, matrixData.length + 10),
+                      columnCount: Math.max(26, headerRow.length + 5),
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+
+      // Write matrix values
+      await client.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${destinationSheet}'!A1`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: matrixData,
+        },
+      });
+
+      writtenToGoogleSheets = true;
+    } catch (err) {
+      console.warn("[performGoogleSheetBackup] Error writing to Google Sheet:", err);
+    }
+  }
+
+  // 4. Try Apps Script Webhook if configured in environment
+  const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
+  if (!writtenToGoogleSheets && appsScriptUrl) {
+    try {
+      const webhookRes = await fetch(appsScriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "BACKUP_ATTENDANCE",
+          backupId,
+          timestamp,
+          spreadsheetId,
+          sheetName: destinationSheet,
+          matrixData,
+          recordedRounds,
+        }),
+      });
+      const webhookData = await webhookRes.json();
+      if (webhookData.success) {
+        writtenToGoogleSheets = true;
+      }
+    } catch (err) {
+      console.warn("[performGoogleSheetBackup] Apps Script webhook error:", err);
+    }
+  }
+
+  // 5. Always persist full snapshot JSON locally in data/backups/
+  const snapshot = {
+    backupId,
+    timestamp,
+    formattedTime,
+    adminUser,
+    spreadsheetId,
+    destinationSheet,
+    writtenToGoogleSheets,
+    studentsCount: students.length,
+    subjectsCount: subjects.length,
+    roundsCount: recordedRounds.length,
+    report,
+    matrixData,
+    recordedRounds,
+  };
+
+  fs.writeFileSync(
+    path.join(BACKUP_DIR, `${backupId}.json`),
+    JSON.stringify(snapshot, null, 2),
+    "utf-8"
+  );
+
+  const backupRecord: BackupRecord = {
+    id: backupId,
+    timestamp,
+    formattedTime,
+    adminUser,
+    studentsCount: students.length,
+    subjectsCount: subjects.length,
+    roundsCount: recordedRounds.length,
+    writtenToGoogleSheets,
+    destinationSheet,
+    status: writtenToGoogleSheets ? "SUCCESS" : "SAVED_LOCAL",
+    message: writtenToGoogleSheets
+      ? `Đã sao lưu thành công toàn bộ kết quả điểm danh vào sheet [${destinationSheet}] trên Google Sheets!`
+      : `Đã lưu trữ an toàn bản sao lưu kết quả điểm danh (${students.length} học viên, ${subjects.length} môn). Bạn có thể tải file CSV/JSON hoặc cấu hình Apps Script để đẩy trực tiếp lên Google Sheets.`,
+  };
+
+  saveBackupRecord(backupRecord);
+
+  invalidateCache();
+  updateSyncTimestamp();
+
+  await logAuditEvent("BACKUP_ATTENDANCE", "GOOGLE_SHEETS", destinationSheet, {
+    backupId,
+    writtenToGoogleSheets,
+    studentsCount: students.length,
+    subjectsCount: subjects.length,
+    adminUser,
+  });
+
+  return {
+    success: true,
+    backupId,
+    timestamp,
+    studentsCount: students.length,
+    subjectsCount: subjects.length,
+    roundsCount: recordedRounds.length,
+    writtenToGoogleSheets,
+    destinationSheet,
+    message: backupRecord.message,
+  };
+}
+
+/**
+ * Generate a UTF-8 CSV string (with BOM) for Google Sheets / Excel compatibility
+ */
+export async function exportAttendanceCsv(): Promise<string> {
+  const students = await getStudents();
+  const subjects = await getSubjects();
+  const report = await getComprehensiveAttendanceReport();
+  const formattedTime = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+
+  const rows: string[][] = [];
+
+  // Title
+  rows.push(["BẢNG SAO LƯU KẾT QUẢ ĐIỂM DANH LỚP CNTT - K19 CĐ"]);
+  rows.push([
+    "Thời gian xuất:",
+    formattedTime,
+    "Sĩ số lớp:",
+    `${students.length} học viên`,
+    "Số môn học:",
+    `${subjects.length} môn`,
+  ]);
+  rows.push([]);
+
+  // Headers
+  const headers = [
+    "STT",
+    "Mã Sinh Viên",
+    "Họ và Tên",
+    "Ngày Sinh",
+    "Hệ Đào Tạo",
+    "Ngày Vào Lớp",
+  ];
+
+  for (const sub of subjects) {
+    headers.push(`${sub.name} (Buổi đã học/Tổng)`);
+    headers.push(`${sub.name} (Tỷ lệ %)`);
+  }
+
+  headers.push("Tổng Buổi Tham Gia");
+  headers.push("Tổng Buổi Áp Dụng");
+  headers.push("Chuyên Cần Chung (%)");
+  headers.push("Tình Trạng");
+  headers.push("Cảnh Báo Chuyên Cần");
+
+  rows.push(headers);
+
+  // Student rows
+  report.studentStats.forEach((sStat, idx) => {
+    const stu = sStat.student;
+    const row: string[] = [
+      String(idx + 1),
+      stu.id,
+      stu.fullName,
+      stu.dateOfBirth || "",
+      stu.studySystem || "",
+      stu.dateJoinedGroup || "",
+    ];
+
+    for (const sub of subjects) {
+      const subStat = sStat.subjects.find((s) => s.subjectId === sub.id || s.sheetName === sub.attendanceSheet);
+      if (!subStat) {
+        row.push("--");
+        row.push("--");
+      } else if (!subStat.isApplicable) {
+        row.push("--");
+        row.push("--");
+      } else {
+        row.push(subStat.sessionFraction || `${subStat.attendedSessions}/${subStat.totalSessionsInSheet}`);
+        row.push(subStat.recordedSessions > 0 ? `${subStat.attendanceRate}%` : "--");
+      }
+    }
+
+    row.push(String(sStat.totalAttendedSessionsAll));
+    row.push(String(sStat.totalSessionsAll));
+    row.push(`${sStat.overallAttendanceRate}%`);
+    row.push(
+      sStat.overallAttendanceRate >= 80
+        ? "Đạt chuẩn"
+        : sStat.totalSessionsAll === 0
+        ? "Chưa học"
+        : "Cần cải thiện"
+    );
+    row.push(sStat.overallWarning ? "CẢNH BÁO" : "Bình thường");
+
+    rows.push(row);
+  });
+
+  // Convert to CSV with escaping
+  const csvContent = rows
+    .map((r) =>
+      r
+        .map((cell) => {
+          const str = String(cell ?? "");
+          if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        })
+        .join(",")
+    )
+    .join("\r\n");
+
+  // Prepend UTF-8 BOM (\uFEFF) to make Excel / Google Sheets open Vietnamese characters flawlessly
+  return "\uFEFF" + csvContent;
+}
+
+/**
+ * Returns the ready-to-use Google Apps Script code snippet
+ */
+export function getGoogleAppsScriptSnippet(): string {
+  return `/**
+ * GOOGLE APPS SCRIPT WEB APP - SAO LƯU ĐIỂM DANH LỚP CNTT - K19 CĐ
+ * Hướng dẫn cài đặt 1 phút:
+ * 1. Mở Google Sheet -> Menu "Tiện ích mở rộng" (Extensions) -> "Apps Script"
+ * 2. Dán toàn bộ mã này vào và bấm biểu tượng "Lưu" (Save - Ctrl+S)
+ * 3. Bấm "Triển khai" (Deploy) -> "Triển khai mới" (New deployment)
+ * 4. Chọn loại: "Ứng dụng web" (Web App)
+ *    - Thực thi với tư cách: "Tôi" (Me)
+ *    - Ai có quyền truy cập: "Bất kỳ ai" (Anyone)
+ * 5. Copy URL Ứng dụng web được cấp và dán vào Hệ thống Điểm danh (Trang Sao Lưu Google Sheet).
+ */
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    if (data.action === "BACKUP_ATTENDANCE") {
+      var sheetName = data.sheetName || "SAO_LUU_DIEM_DANH";
+      var sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        sheet = ss.insertSheet(sheetName);
+      }
+      
+      // Xóa nội dung cũ để ghi bản sao lưu mới nhất
+      sheet.clearContents();
+      
+      var matrix = data.matrixData || [];
+      if (matrix.length > 0) {
+        var numRows = matrix.length;
+        var numCols = matrix[0].length;
+        for (var i = 1; i < numRows; i++) {
+          if (matrix[i].length > numCols) numCols = matrix[i].length;
+        }
+        
+        // Cân bằng số cột
+        var cleanMatrix = matrix.map(function(row) {
+          while (row.length < numCols) row.push("");
+          return row;
+        });
+        
+        sheet.getRange(1, 1, numRows, numCols).setValues(cleanMatrix);
+        
+        // Định dạng tiêu đề đẹp mắt
+        sheet.getRange(1, 1).setFontSize(14).setFontWeight("bold");
+        sheet.getRange(4, 1, 1, numCols).setBackground("#EEF2FF").setFontWeight("bold");
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        message: "Sao lưu thành công vào sheet " + sheetName,
+        timestamp: new Date().toISOString()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: "Hành động không hợp lệ"
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "ONLINE",
+    app: "CNTT K19 CĐ Attendance Backup Web App",
+    time: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+`;
+}

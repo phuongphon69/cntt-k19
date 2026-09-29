@@ -395,7 +395,9 @@ export function StatsDashboardClient({ report }: StatsDashboardClientProps) {
                           >
                             <span>{s.student.fullName}</span>
                             {s.overallWarning && (
-                              <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" title="Chuyên cần dưới 80%" />
+                              <span title="Chuyên cần dưới 80%">
+                                <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                              </span>
                             )}
                           </Link>
                           <div className="text-[10px] text-slate-400 mt-0.5 space-y-0.5">

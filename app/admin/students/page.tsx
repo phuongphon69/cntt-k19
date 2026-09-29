@@ -19,7 +19,7 @@ export default async function AdminStudentsPage() {
           </h1>
         </div>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Danh sách sinh viên chính thức lấy từ sheet <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">DANH SÁCH LỚP</code>. Dữ liệu nhạy cảm (SĐT/CCCD) được bảo vệ chỉ hiển thị trong khu vực Quản trị.
+          Danh sách sinh viên chính thức lấy từ sheet <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">CNTT - K19</code>. Dữ liệu nhạy cảm (SĐT/CCCD) được bảo vệ chỉ hiển thị trong khu vực Quản trị.
         </p>
       </div>
 

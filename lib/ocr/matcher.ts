@@ -19,8 +19,8 @@ export function matchZoomParticipants(
   students: PublicStudent[],
   options?: MatchOptions
 ): OcrResultSummary {
-  const highThreshold = options?.highThreshold ?? 90;
-  const reviewThreshold = options?.reviewThreshold ?? 75;
+  const highThreshold = options?.highThreshold ?? 85;
+  const reviewThreshold = options?.reviewThreshold ?? 65;
   const aliases = options?.aliases || [];
   const currentAttendance = options?.currentAttendanceValues || {};
 
@@ -53,12 +53,26 @@ export function matchZoomParticipants(
     // 2. If no direct alias, perform fuzzy matching against roster
     if (!bestStudent) {
       for (const student of students) {
-        const score = calculateNameMatchScore(
+        // Match using cleaned name
+        let score = calculateNameMatchScore(
           student.fullName,
           item.cleanedName,
           student.dateOfBirth,
           item.extractedDob
         );
+
+        // Also evaluate against raw original text if score isn't already high
+        if (score < 90 && item.original !== item.cleanedName) {
+          const rawScore = calculateNameMatchScore(
+            student.fullName,
+            item.original,
+            student.dateOfBirth,
+            item.extractedDob
+          );
+          if (rawScore > score) {
+            score = rawScore;
+          }
+        }
 
         if (score > bestScore) {
           bestScore = score;
@@ -72,6 +86,8 @@ export function matchZoomParticipants(
       status = "MATCHED";
     } else if (bestScore >= reviewThreshold) {
       status = "NEEDS_REVIEW";
+    } else {
+      status = "UNMATCHED";
     }
 
     // Check conflict with existing cell value

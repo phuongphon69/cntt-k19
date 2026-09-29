@@ -1,0 +1,56 @@
+{
+  "id": "/cntt-k19",
+  "name": "CNTT - K19 CĐ | Điểm Danh & Thời Khóa Biểu",
+  "short_name": "CNTT K19",
+  "description": "Hệ thống theo dõi lịch học, điểm danh Zoom và chuyên cần lớp CNTT - K19 CĐ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "554x554",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Lớp học Hôm Nay",
+      "short_name": "Hôm nay",
+      "description": "Xem môn học và link Zoom hôm nay",
+      "url": "/today",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Thời Khóa Biểu",
+      "short_name": "TKB",
+      "description": "Xem thời khóa biểu các tuần",
+      "url": "/schedule",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Thống Kê Chuyên Cần",
+      "short_name": "Thống kê",
+      "description": "Xem bảng tổng hợp số buổi đã học",
+      "url": "/stats",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

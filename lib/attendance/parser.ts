@@ -2,6 +2,7 @@
 import { AttendanceSession, StudentAttendanceRecord, AttendanceValue } from "@/types";
 import { normalizeVietnameseName, normalizeVietnameseNameWithoutAccent } from "@/lib/vietnamese/normalize";
 import { calculateSubjectAttendance } from "./calculator";
+import { parseVNDate } from "@/lib/utils";
 
 export interface ParsedAttendanceSheet {
   sheetName: string;
@@ -15,12 +16,19 @@ export interface ParsedAttendanceSheet {
   }[];
   records: StudentAttendanceRecord[];
   rawRowsCount: number;
+  totalClassStudents?: number;
+  enrolledStudentsCount?: number;
 }
 
 /**
  * Robust parser for attendance sheets following the 4-column-per-session layout
+ * Accepts optional tkbDates to strictly sync session dates with sheet "TKB"
  */
-export function parseAttendanceSheet(sheetName: string, rawMatrix: any[][]): ParsedAttendanceSheet {
+export function parseAttendanceSheet(
+  sheetName: string,
+  rawMatrix: any[][],
+  tkbDates?: string[]
+): ParsedAttendanceSheet {
   if (!rawMatrix || rawMatrix.length < 3) {
     return {
       sheetName,
@@ -33,25 +41,41 @@ export function parseAttendanceSheet(sheetName: string, rawMatrix: any[][]): Par
     };
   }
 
-  // 1. Read Metadata from Row 1 & 2
-  const row1 = rawMatrix[0] || [];
-  const row2 = rawMatrix[1] || [];
-  const row3 = rawMatrix[2] || [];
-
-  // If sheetName has prefix "DD <TÊN>", that is the most reliable clean title
   const cleanFromSheet = sheetName.replace(/^DD\s+/i, "").trim();
 
-  // Find exact subject name from metadata row
-  let subjectName = "";
-  // Check Row 1 / Row 2 cells
-  for (let r = 0; r < Math.min(2, rawMatrix.length); r++) {
+  // 1. Locate the header row containing "HỌ VÀ TÊN" / "HỌ TÊN" or "STT"
+  let headerRowIdx = -1;
+  for (let r = 0; r < Math.min(5, rawMatrix.length); r++) {
     const row = rawMatrix[r] || [];
-    for (let c = 0; c < 10; c++) {
+    const joined = row.map((c: any) => String(c || "").toUpperCase()).join(" ");
+    if (
+      joined.includes("HỌ VÀ TÊN") ||
+      joined.includes("HỌ TÊN") ||
+      (joined.includes("STT") && (joined.includes("NGÀY") || joined.includes("HỆ")))
+    ) {
+      headerRowIdx = r;
+      break;
+    }
+  }
+  if (headerRowIdx === -1) headerRowIdx = Math.min(2, rawMatrix.length - 1);
+
+  // 2. Discover Subject Name, Teacher Name, Total Sessions from metadata rows
+  let subjectName = "";
+  let teacherName = "";
+  let totalSessions = 0;
+
+  for (let r = 0; r <= headerRowIdx; r++) {
+    const row = rawMatrix[r] || [];
+    for (let c = 0; c < Math.min(row.length, 15); c++) {
       const val = String(row[c] || "").trim();
+      const prev = String(row[c - 1] || "").trim().toLowerCase();
+
+      // Subject name
       if (
+        !subjectName &&
         val &&
         !val.toUpperCase().includes("BẢNG ĐIỂM DANH") &&
-        !["Môn học", "Tên môn học", "Giảng viên", "Số buổi", "STT", "HỌ VÀ TÊN"].includes(val)
+        !["Môn học", "Tên môn học", "Giảng viên", "Số buổi", "STT", "HỌ VÀ TÊN", "NGÀY SINH"].includes(val)
       ) {
         if (
           val.toLowerCase() === "chính trị" ||
@@ -61,109 +85,115 @@ export function parseAttendanceSheet(sheetName: string, rawMatrix: any[][]): Par
           val.toLowerCase().includes(cleanFromSheet.toLowerCase())
         ) {
           subjectName = val;
-          break;
         }
       }
+
+      // Teacher
+      if (!teacherName && prev.includes("giảng viên") && val) {
+        teacherName = val;
+      }
+
+      // Total sessions
+      if (!totalSessions && prev.includes("số buổi") && val && !isNaN(parseInt(val, 10))) {
+        totalSessions = parseInt(val, 10);
+      }
     }
-    if (subjectName) break;
   }
 
   if (!subjectName) {
-    // Capitalize cleanFromSheet
     subjectName = cleanFromSheet.charAt(0).toUpperCase() + cleanFromSheet.slice(1).toLowerCase();
   }
 
-  // Teacher name
-  let teacherName = "";
-  for (let r = 0; r < Math.min(2, rawMatrix.length); r++) {
-    const row = rawMatrix[r] || [];
-    for (let c = 0; c < 10; c++) {
-      const prev = String(row[c - 1] || "").trim().toLowerCase();
-      const curr = String(row[c] || "").trim();
-      if (prev.includes("giảng viên") && curr) {
-        teacherName = curr;
-        break;
-      }
-    }
-    if (teacherName) break;
-  }
-
-  // Total sessions from header
-  let totalSessions = 0;
-  for (let r = 0; r < Math.min(2, rawMatrix.length); r++) {
-    const row = rawMatrix[r] || [];
-    for (let c = 0; c < 10; c++) {
-      const prev = String(row[c - 1] || "").trim().toLowerCase();
-      const curr = String(row[c] || "").trim();
-      if (prev.includes("số buổi") && curr && !isNaN(parseInt(curr, 10))) {
-        totalSessions = parseInt(curr, 10);
-        break;
-      }
-    }
-    if (totalSessions) break;
-  }
-
-  // 2. Discover Session columns starting from col F (index 5)
-  // Each session group has 4 columns: LẦN 1, LẦN 2, LẦN 3, %
+  // 3. Discover Session columns starting from col F (index 5)
+  // The row with "HỌ VÀ TÊN" (headerRowIdx) has the session dates
+  const dateRow = rawMatrix[headerRowIdx] || [];
+  const labelRow = rawMatrix[headerRowIdx + 1] || [];
   const sessionList: { index: number; date: string; colStart: number }[] = [];
 
   let colIdx = 5; // Column F
   let sessionIndex = 1;
 
-  while (colIdx < row2.length) {
-    const dateCell = String(row2[colIdx] || "").trim();
-    const colNameInRow3 = String(row3[colIdx] || "").trim().toUpperCase();
-    const colNameInRow2 = String(row2[colIdx] || "").trim().toUpperCase();
+  while (colIdx < dateRow.length) {
+    const dateCell = String(dateRow[colIdx] || "").trim();
+    const labelCell = String(labelRow[colIdx] || "").trim().toUpperCase();
 
-    // Check if we hit summary columns like "TỔNG X", "TỔNG P", "TỔNG CỘNG"
+    // Check if we hit summary columns
     if (
-      colNameInRow2.includes("TỔNG") ||
-      colNameInRow3.includes("TỔNG") ||
-      colNameInRow2.includes("SĨ SỐ") ||
-      colNameInRow3.includes("SĨ SỐ")
+      dateCell.toUpperCase().includes("TỔNG") ||
+      dateCell.toUpperCase().includes("SĨ SỐ") ||
+      dateCell.toUpperCase().includes("GHI CHÚ") ||
+      labelCell.includes("TỔNG") ||
+      labelCell.includes("SĨ SỐ")
     ) {
       break;
     }
 
-    // Check if dateCell has a date format or "BUỔI X"
-    let dateStr = dateCell;
-    if (!dateStr) {
-      // Check row 3 or nearby
-      if (colNameInRow3.startsWith("LẦN") || colNameInRow3 === "%") {
-        dateStr = `Buổi ${sessionIndex}`;
+    const hasTkbDate = !!(tkbDates && tkbDates[sessionIndex - 1]);
+    const hasCellDate = !!parseVNDate(dateCell);
+    const hasSessionLabel = labelCell.startsWith("LẦN") || labelCell.includes("LẦN");
+
+    // Check if students have attendance marks in this column
+    let hasStudentData = false;
+    for (let r = headerRowIdx + 2; r < Math.min(headerRowIdx + 15, rawMatrix.length); r++) {
+      const v = String(rawMatrix[r]?.[colIdx] || "").trim();
+      if (v) {
+        hasStudentData = true;
+        break;
       }
     }
 
-    // If col has at least some indicator of being a session start
-    if (dateStr || colNameInRow3.includes("LẦN 1") || colNameInRow3.includes("LẦN 2") || colIdx + 3 < row2.length) {
-      sessionList.push({
-        index: sessionIndex,
-        date: dateStr || `Buổi ${sessionIndex}`,
-        colStart: colIdx,
-      });
-      sessionIndex++;
-      colIdx += 4; // Move to next 4-column group
-    } else {
-      colIdx++;
+    // Stop if column has neither TKB date, nor cell date, nor session label, nor student marks
+    if (!hasTkbDate && !hasCellDate && !hasSessionLabel && !hasStudentData) {
+      break;
     }
+
+    // If total sessions was declared and we reached it and have no further dates
+    if (totalSessions > 0 && sessionIndex > totalSessions && !hasTkbDate && !hasCellDate) {
+      break;
+    }
+
+    // Determine session date:
+    // 1. If TKB has this session's date, use TKB date!
+    // 2. Else if dateCell matches a real date pattern, use it!
+    // 3. Else fallback to "Buổi X"
+    let finalDate = "";
+    if (hasTkbDate) {
+      finalDate = tkbDates![sessionIndex - 1];
+    } else if (hasCellDate) {
+      finalDate = dateCell;
+    } else {
+      finalDate = `Buổi ${sessionIndex}`;
+    }
+
+    sessionList.push({
+      index: sessionIndex,
+      date: finalDate,
+      colStart: colIdx,
+    });
+
+    sessionIndex++;
+    colIdx += 4; // Move to next 4-column group (LẦN 1, LẦN 2, LẦN 3, %)
   }
 
-  if (totalSessions === 0) {
+  if (totalSessions === 0 || totalSessions < sessionList.length) {
     totalSessions = sessionList.length;
   }
 
-  // 3. Read Student Rows (starting from row 4, index 3)
+  // 4. Read Student Rows (starting after the label row)
+  const studentStartRow = headerRowIdx + 2;
   const records: StudentAttendanceRecord[] = [];
 
-  for (let r = 3; r < rawMatrix.length; r++) {
+  for (let r = studentStartRow; r < rawMatrix.length; r++) {
     const row = rawMatrix[r];
     if (!row || row.length === 0) continue;
 
-    const stt = String(row[0] || "").trim();
     const rawName = String(row[1] || "").trim();
-
-    // If row is empty or not a student row
-    if (!rawName || rawName.toUpperCase().includes("TỔNG") || rawName.toUpperCase().includes("SĨ SỐ")) {
+    if (
+      !rawName ||
+      rawName.toUpperCase().includes("TỔNG") ||
+      rawName.toUpperCase().includes("SĨ SỐ") ||
+      rawName.toUpperCase().includes("LẦN")
+    ) {
       continue;
     }
 
@@ -173,8 +203,15 @@ export function parseAttendanceSheet(sheetName: string, rawMatrix: any[][]): Par
     const dateJoined = String(row[4] || "").trim();
     const studentId = normalizeVietnameseNameWithoutAccent(rawName).replace(/\s+/g, "_");
 
+    const joinDate = parseVNDate(dateJoined);
+
     const sessionsObj: StudentAttendanceRecord["sessions"] = {};
-    const sessionListForCalc: { date: string; round1: AttendanceValue; round2: AttendanceValue; round3: AttendanceValue }[] = [];
+    const sessionListForCalc: {
+      date: string;
+      round1: AttendanceValue;
+      round2: AttendanceValue;
+      round3: AttendanceValue;
+    }[] = [];
 
     for (const sess of sessionList) {
       const c = sess.colStart;
@@ -195,23 +232,41 @@ export function parseAttendanceSheet(sheetName: string, rawMatrix: any[][]): Par
         else if (u === "M") countM++;
       }
 
-      const rate = isRecorded ? Math.round((countX / 3) * 100 * 10) / 10 : 0;
-      let status: "PRESENT" | "EXCUSED" | "LATE" | "ABSENT" | "UNRECORDED" = "UNRECORDED";
-      if (isRecorded) {
-        if (countX > 0) status = "PRESENT";
-        else if (countP > 0) status = "EXCUSED";
-        else if (countM > 0) status = "LATE";
-        else status = "ABSENT";
-      }
+      const sessDate = parseVNDate(sess.date);
+      const isBeforeEnrollment = !!joinDate && !!sessDate && joinDate.getTime() > sessDate.getTime();
 
-      sessionsObj[sess.date] = {
-        round1: r1,
-        round2: r2,
-        round3: r3,
-        rate,
-        isRecorded,
-        status,
-      };
+      // If session occurred before student joined and student did not attend early:
+      // Mark as NOT_APPLICABLE and exempt from being counted as absent
+      if (isBeforeEnrollment && countX === 0 && countP === 0 && countM === 0) {
+        sessionsObj[sess.date] = {
+          round1: "",
+          round2: "",
+          round3: "",
+          rate: 0,
+          isRecorded: false,
+          status: "NOT_APPLICABLE",
+        };
+      } else {
+        // Tỷ lệ có mặt 2/3 trở lên được tính ngày đó có tham gia học đầy đủ
+        // Trường hợp 0/3 và 1/3 đều là vắng mặt
+        const rate = Math.round((countX / 3) * 100 * 10) / 10;
+        let status: "PRESENT" | "EXCUSED" | "LATE" | "ABSENT" | "UNRECORDED" = "ABSENT";
+        
+        if (countX >= 2) {
+          status = "PRESENT"; // Có tham gia học đầy đủ (2/3 hoặc 3/3)
+        } else {
+          status = "ABSENT"; // Cả 0/3 và 1/3 đều là Vắng mặt
+        }
+
+        sessionsObj[sess.date] = {
+          round1: r1,
+          round2: r2,
+          round3: r3,
+          rate,
+          isRecorded: true,
+          status,
+        };
+      }
 
       sessionListForCalc.push({
         date: sess.date,
@@ -226,13 +281,21 @@ export function parseAttendanceSheet(sheetName: string, rawMatrix: any[][]): Par
       isStudentInSubject: true,
     });
 
+    let missedLateJoinCount = 0;
+    for (const s of Object.values(sessionsObj)) {
+      if (s.status === "NOT_APPLICABLE") {
+        missedLateJoinCount++;
+      }
+    }
+
     records.push({
       studentId,
       studentName,
       dateOfBirth: dob,
       studySystem,
       dateJoinedGroup: dateJoined,
-      isApplicable: true,
+      isApplicable: calc.isApplicable,
+      missedLateJoinCount,
       sessions: sessionsObj,
       totalX: calc.totalX,
       totalP: calc.totalP,
@@ -251,5 +314,6 @@ export function parseAttendanceSheet(sheetName: string, rawMatrix: any[][]): Par
     sessions: sessionList,
     records,
     rawRowsCount: rawMatrix.length,
+    enrolledStudentsCount: records.length,
   };
 }

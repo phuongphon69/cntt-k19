@@ -51,7 +51,7 @@ export async function checkDataHealth(): Promise<DataHealthReport> {
           type: "WARNING",
           code: "UNMAPPED_STUDENT",
           sheetName: sheet,
-          message: `Học viên "${record.studentName}" trong sheet [${sheet}] chưa được liên kết chính xác với DANH SÁCH LỚP.`,
+          message: `Học viên "${record.studentName}" trong sheet [${sheet}] chưa được liên kết chính xác với sheet CNTT - K19.`,
           recommendation: "Vào trang 'Ghép sinh viên' (/admin/student-mapping) để xác nhận.",
         });
       }

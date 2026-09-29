@@ -20,7 +20,7 @@ export default async function SchedulePage() {
           </h1>
         </div>
         <p className="text-sm text-slate-500 mt-1">
-          Theo dõi lịch học, khung giờ tiết học và nhận link vào lớp Zoom / Google Meet trực tiếp
+          Theo dõi lịch học, khung giờ buổi học và nhận link vào lớp Zoom / Google Meet trực tiếp
         </p>
       </div>
 

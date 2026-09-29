@@ -1,0 +1,150 @@
+{
+  "subjectSessionOverrides": {
+    "DD TIẾNG ANH": 23,
+    "TIENG_ANH": 23,
+    "DD GDTC": 11,
+    "GDTC": 11,
+    "DD PHÁP LUẬT": 6,
+    "PHAP_LUAT": 6,
+    "DD KỸ THUẬT LẬP TRÌNH": 6,
+    "KY_THUAT_LAP_TRINH": 6,
+    "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT": 2,
+    "CAU_TRUC_DU_LIEU_VA_GIAI_THUAT": 2,
+    "TEST_DD_SUBJECT_1790648439946": 25,
+    "TEST_DD_SUBJECT_1790650663780": 25,
+    "TEST_DD_SUBJECT_1790650682187": 25,
+    "TEST_DD_SUBJECT_1790650997029": 25,
+    "TEST_DD_SUBJECT_1790651609815": 25,
+    "TEST_DD_SUBJECT_1790652546643": 25,
+    "TEST_DD_SUBJECT_1790652623464": 25,
+    "TEST_DD_SUBJECT_1790653627861": 25,
+    "TEST_DD_SUBJECT_1790653661295": 25,
+    "TEST_DD_SUBJECT_1790654393639": 25,
+    "TEST_DD_SUBJECT_1790654540564": 25,
+    "TEST_DD_SUBJECT_1790666015998": 25,
+    "TEST_DD_SUBJECT_1790666431459": 25,
+    "TEST_DD_SUBJECT_1790666464166": 25,
+    "TEST_DD_SUBJECT_1790666518591": 25,
+    "TEST_DD_SUBJECT_1790666593040": 25,
+    "TEST_DD_SUBJECT_1790666639395": 25,
+    "TEST_DD_SUBJECT_1790666726082": 25,
+    "TEST_DD_SUBJECT_1790666786859": 25,
+    "TEST_DD_SUBJECT_1790666812896": 25,
+    "TEST_DD_SUBJECT_1790667370193": 25,
+    "TEST_DD_SUBJECT_1790668446942": 25,
+    "TEST_DD_SUBJECT_1790668559569": 25,
+    "TEST_DD_SUBJECT_1790670452592": 25,
+    "TEST_DD_SUBJECT_1790670484200": 25,
+    "TEST_DD_SUBJECT_1790671314561": 25,
+    "TEST_DD_SUBJECT_1790672452968": 25,
+    "TEST_DD_SUBJECT_1790672746069": 25,
+    "TEST_DD_SUBJECT_1790673357536": 25,
+    "TEST_DD_SUBJECT_1790674495865": 25,
+    "TEST_DD_SUBJECT_1790674758425": 25,
+    "TEST_DD_SUBJECT_1790674890567": 25,
+    "TEST_DD_SUBJECT_1790675102626": 25,
+    "TEST_DD_SUBJECT_1790675591150": 25,
+    "TEST_DD_SUBJECT_1790675669134": 25,
+    "TEST_DD_SUBJECT_1790677319553": 25,
+    "TEST_DD_SUBJECT_1790678364931": 25,
+    "TEST_DD_SUBJECT_1790678671753": 25,
+    "TEST_DD_SUBJECT_1790678710650": 25,
+    "TEST_DD_SUBJECT_1790679357936": 25
+  },
+  "customSubjects": [
+    {
+      "id": "phap_luat",
+      "code": "PHAP_LUAT",
+      "name": "Pháp Luật",
+      "shortName": "Pháp Luật",
+      "attendanceSheet": "DD PHÁP LUẬT",
+      "teacher": "Cô Thúy",
+      "teacherPhone": "0902060345",
+      "totalSessions": 6,
+      "status": "ACTIVE",
+      "isPublic": true,
+      "recordedSessionsCount": 0,
+      "averageAttendanceRate": 0,
+      "isFromTkb": true,
+      "hasSheet": false,
+      "tkbSessionsCount": 6
+    },
+    {
+      "id": "ky_thuat_lap_trinh",
+      "code": "KY_THUAT_L",
+      "name": "Kỹ Thuật Lập Trình",
+      "shortName": "Kỹ Thuật Lập Trình",
+      "attendanceSheet": "DD KỸ THUẬT LẬP TRÌNH",
+      "teacher": "Cô Hòa",
+      "teacherPhone": "0974260396",
+      "totalSessions": 6,
+      "status": "ACTIVE",
+      "isPublic": true,
+      "recordedSessionsCount": 0,
+      "averageAttendanceRate": 0,
+      "isFromTkb": true,
+      "hasSheet": false,
+      "tkbSessionsCount": 6
+    },
+    {
+      "id": "cau_truc_du_lieu_va_giai_thuat",
+      "code": "CAU_TRUC_D",
+      "name": "Cấu Trúc Dữ Liệu Và Giải Thuật",
+      "shortName": "Cấu Trúc Dữ Liệu Và Giải Thuật",
+      "attendanceSheet": "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT",
+      "teacher": "Thầy Phan",
+      "teacherPhone": "0917683000",
+      "totalSessions": 2,
+      "status": "ACTIVE",
+      "isPublic": true,
+      "recordedSessionsCount": 0,
+      "averageAttendanceRate": 0,
+      "isFromTkb": true,
+      "hasSheet": false,
+      "tkbSessionsCount": 2
+    }
+  ],
+  "createdSheets": [
+    "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT",
+    "DD KỸ THUẬT LẬP TRÌNH"
+  ],
+  "recordedAttendanceRounds": [
+    {
+      "sheetName": "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT",
+      "sessionDate": "29/09/2026",
+      "roundNumber": 1,
+      "updates": [
+        {
+          "studentId": "nguyen_huy_phuong",
+          "value": "X"
+        },
+        {
+          "studentId": "hoang_cong_minh",
+          "value": "X"
+        },
+        {
+          "studentId": "bui_hong_quan",
+          "value": "P"
+        }
+      ],
+      "recordedAt": "2026-09-29T10:55:59.573Z"
+    },
+    {
+      "sheetName": "DD KỸ THUẬT LẬP TRÌNH",
+      "sessionDate": "28/09/2026",
+      "roundNumber": 1,
+      "updates": [
+        {
+          "studentId": "nguyen_huy_phuong",
+          "value": "X"
+        },
+        {
+          "studentId": "bui_hong_quan",
+          "value": "X"
+        }
+      ],
+      "recordedAt": "2026-09-29T07:35:16.452Z"
+    }
+  ],
+  "lastSyncedAt": "2026-09-29T10:55:59.573Z"
+}

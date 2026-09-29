@@ -17,13 +17,20 @@ import {
   Moon,
   GraduationCap,
   BarChart3,
+  Share2,
+  Smartphone,
+  Download,
 } from "lucide-react";
 import { SearchModal } from "./search-modal";
+import { ShareClassModal } from "./share-class-modal";
+import { PwaInstallPrompt } from "./pwa-install-prompt";
 import { PublicStudent, Subject } from "@/types";
 
 export function Navbar() {
   const pathname = usePathname();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isInstallOpen, setIsInstallOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [students, setStudents] = useState<PublicStudent[]>([]);
@@ -79,8 +86,12 @@ export function Navbar() {
         <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo & Class Title */}
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-              <GraduationCap className="w-6 h-6" />
+            <div className="relative w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200/80 dark:border-slate-700/80 bg-slate-900">
+              <img
+                src="/logo.png"
+                alt="Logo CNTT - K19"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <div className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-none group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
@@ -127,6 +138,28 @@ export function Navbar() {
               <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-white dark:bg-slate-900 text-slate-500 rounded border border-slate-200 dark:border-slate-700">
                 ⌘K
               </kbd>
+            </button>
+
+            {/* Share Link Button */}
+            <button
+              type="button"
+              onClick={() => setIsShareOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60 transition-colors"
+              title="Gửi link cho cả lớp truy cập"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Gửi Link</span>
+            </button>
+
+            {/* Install PWA Button */}
+            <button
+              type="button"
+              onClick={() => setIsInstallOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200/60 dark:border-slate-700/60 transition-colors"
+              title="Cài đặt App vào màn hình chính điện thoại"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="hidden sm:inline">Cài App</span>
             </button>
 
             {/* Dark Mode Toggle */}
@@ -181,6 +214,32 @@ export function Navbar() {
                 </Link>
               );
             })}
+
+            {/* Mobile Share & Install Buttons */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsShareOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 p-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Gửi link lớp</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsInstallOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 p-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Cài App MH chính</span>
+              </button>
+            </div>
           </div>
         )}
       </header>
@@ -212,6 +271,17 @@ export function Navbar() {
         onClose={() => setIsSearchOpen(false)}
         students={students}
         subjects={subjects}
+      />
+
+      <ShareClassModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        onOpenInstallGuide={() => setIsInstallOpen(true)}
+      />
+
+      <PwaInstallPrompt
+        isOpen={isInstallOpen}
+        onClose={() => setIsInstallOpen(false)}
       />
     </>
   );

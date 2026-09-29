@@ -42,7 +42,8 @@ export function stringSimilarity(s1: string, s2: string): number {
  * - Exact full name (with or without accents)
  * - Last name + First name variations
  * - Extra tokens / noise
- * - Date of Birth match bonus
+ * - Initial abbreviations (e.g. Q for Quang, H for Huy/Hoang)
+ * - Date of Birth match bonus (including day/month matches)
  */
 export function calculateNameMatchScore(
   studentName: string,
@@ -69,47 +70,69 @@ export function calculateNameMatchScore(
 
   if (sInQ || qInS) {
     let score = 95;
-    // If DOB matches, solid 99
+    // If DOB matches, solid 99-100
     if (studentDob && extractedDob && isSameDob(studentDob, extractedDob)) {
       score = 99;
     }
     return score;
   }
 
-  // 3. Check First Name (last token in Vietnamese) match + partial other tokens
+  // 3. Token matching with initials & first name weight
   const sFirstName = sTokens[sTokens.length - 1];
   const qFirstName = qTokens[qTokens.length - 1];
 
   let tokenMatchCount = 0;
-  for (const t of sTokens) {
-    if (qTokens.includes(t)) {
+  let hasFirstNameMatch = false;
+
+  for (const qT of qTokens) {
+    if (sTokens.includes(qT)) {
       tokenMatchCount++;
+      if (qT === sFirstName) hasFirstNameMatch = true;
+    } else if (qT.length === 1) {
+      // Single letter initial (e.g. 'q' for 'quang' or 'p' for 'phuong')
+      const matchesInitial = sTokens.some((sT) => sT.startsWith(qT));
+      if (matchesInitial) {
+        tokenMatchCount += 0.5;
+      }
     }
   }
 
   const tokenRatio = tokenMatchCount / Math.max(sTokens.length, qTokens.length);
-
-  // Levenshtein similarity on normalized strings
   const stringSim = stringSimilarity(sNorm, qNorm);
 
-  // Weighted score
   let score = (tokenRatio * 0.6 + stringSim * 0.4) * 100;
 
-  // If first name doesn't match at all, penalize
-  if (sFirstName && qFirstName && sFirstName !== qFirstName && stringSimilarity(sFirstName, qFirstName) < 0.7) {
+  // Bonus if student's primary given name matches
+  if (hasFirstNameMatch) {
+    score = Math.max(score, 75);
+  }
+
+  // If query's last word is anywhere in student's name (e.g. "Huy" in "Nguyen Huy Phuong")
+  if (sTokens.includes(qFirstName)) {
+    score = Math.max(score, 70);
+  }
+
+  // If first name doesn't match at all and string similarity is low, penalize
+  if (
+    sFirstName &&
+    qFirstName &&
+    sFirstName !== qFirstName &&
+    !sTokens.includes(qFirstName) &&
+    stringSimilarity(sFirstName, qFirstName) < 0.6
+  ) {
     score = Math.min(score, 60);
   }
 
   // If DOB matches, boost score significantly
   if (studentDob && extractedDob && isSameDob(studentDob, extractedDob)) {
-    score = Math.min(100, score + 25);
+    score = Math.min(100, score + 35);
   }
 
   return Math.round(Math.min(100, Math.max(0, score)));
 }
 
 /**
- * Check if two date strings represent the same date (e.g. 02/12/1985 vs 02.12.1985 or 2/12/1985)
+ * Check if two date strings represent the same date (e.g. 02/12/1985 vs 02.12.1985 or 2/12/1985 or day/month 10/08 vs 10/08/1997)
  */
 export function isSameDob(dob1?: string, dob2?: string): boolean {
   if (!dob1 || !dob2) return false;
@@ -123,8 +146,17 @@ export function isSameDob(dob1?: string, dob2?: string): boolean {
   const p1 = dob1.split(/[/.-]/).map((x) => parseInt(x, 10));
   const p2 = dob2.split(/[/.-]/).map((x) => parseInt(x, 10));
 
+  // Full day, month, year
   if (p1.length >= 3 && p2.length >= 3) {
-    return p1[0] === p2[0] && p1[1] === p2[1] && p1[2] === p2[2];
+    const y1 = p1[2] < 100 ? (p1[2] > 30 ? 1900 + p1[2] : 2000 + p1[2]) : p1[2];
+    const y2 = p2[2] < 100 ? (p2[2] > 30 ? 1900 + p2[2] : 2000 + p2[2]) : p2[2];
+    return p1[0] === p2[0] && p1[1] === p2[1] && y1 === y2;
   }
+
+  // Day & month match (e.g. 10/08 matches 10/08/1997)
+  if (p1.length >= 2 && p2.length >= 2) {
+    return p1[0] === p2[0] && p1[1] === p2[1];
+  }
+
   return false;
 }

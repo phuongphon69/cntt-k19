@@ -23,6 +23,7 @@ import {
   Menu,
   X,
   BarChart3,
+  Database,
 } from "lucide-react";
 
 export function AdminSidebar() {
@@ -58,6 +59,7 @@ export function AdminSidebar() {
   const menuItems = [
     { href: "/admin", label: "Tổng quan", icon: LayoutDashboard },
     { href: "/admin/sync", label: "Đồng bộ Google Sheet", icon: RefreshCw },
+    { href: "/admin/backup", label: "Sao lưu Google Sheet", icon: Database, highlight: true },
     { href: "/admin/attendance/zoom", label: "Điểm danh Zoom OCR", icon: Camera, highlight: true },
     { href: "/admin/attendance/manual", label: "Điểm danh thủ công", icon: CheckSquare },
     { href: "/stats", label: "Thống kê Chuyên cần", icon: BarChart3 },
@@ -87,6 +89,14 @@ export function AdminSidebar() {
         </button>
       </div>
 
+      {/* Mobile Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-xs lg:hidden transition-opacity"
+        />
+      )}
+
       {/* Sidebar Container */}
       <aside
         className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between transition-transform duration-200 ${
@@ -97,8 +107,12 @@ export function AdminSidebar() {
           {/* Admin Header */}
           <div className="flex items-center justify-between">
             <Link href="/admin" className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20">
-                <ShieldCheck className="w-5 h-5" />
+              <div className="relative w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-indigo-500/20 shrink-0 border border-slate-200/80 dark:border-slate-700/80 bg-slate-900">
+                <img
+                  src="/logo.png"
+                  alt="Logo CNTT - K19"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div>
                 <div className="font-extrabold text-sm text-slate-900 dark:text-white leading-none">

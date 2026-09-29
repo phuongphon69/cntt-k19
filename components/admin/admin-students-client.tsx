@@ -104,8 +104,8 @@ export function AdminStudentsClient({ initialStudents }: AdminStudentsClientProp
           dateJoinedGroup,
           notes,
           active: true,
-          sourceSheet: "DANH SÁCH LỚP",
-          sourceRow: students.length + 4,
+          sourceSheet: "CNTT - K19",
+          sourceRow: students.length + 2,
         };
         setStudents([...students, newStu]);
         setShowAddModal(false);

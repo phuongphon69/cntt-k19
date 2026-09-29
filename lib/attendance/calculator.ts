@@ -26,8 +26,10 @@ export interface SessionCalcResult {
   countP: number;
   countM: number;
   rate: number; // 0..100
-  displayText: string; // e.g. "3/3", "2/3", "1/3", "0/3", "--"
-  statusText: string; // "100%", "66.7%", "Chưa ghi nhận", "Không áp dụng"
+  displayText: string; // e.g. "3/3", "2/3", "1/3", "--" (0/3 is displayed as "--")
+  statusText: string; // "Có tham gia học đầy đủ", "Vắng mặt (1/3)", "Chưa ghi nhận"
+  isFullAttendance: boolean; // rate >= 66 / countX >= 2
+  isAbsent: boolean; // rate > 0 && rate < 66 / countX === 1
 }
 
 /**
@@ -58,6 +60,10 @@ export function isLate(val: AttendanceValue, config = DEFAULT_ATTENDANCE_CONFIG)
 
 /**
  * Calculate session statistics for 3 rounds of a single session
+ * Rules:
+ * - 0/3: chưa ghi nhận, hiển thị là "--"
+ * - 1/3: tính vắng mặt lần điểm danh đó (dưới ngưỡng 2/3)
+ * - >= 2/3 (2/3 hoặc 3/3): được tính ngày đó có tham gia học đầy đủ
  */
 export function calculateSessionAttendance(
   r1: AttendanceValue,
@@ -70,9 +76,9 @@ export function calculateSessionAttendance(
   const c3 = cleanAttendanceValue(r3);
 
   const rounds = [c1, c2, c3];
-  const isRecorded = rounds.some((r) => r !== "");
+  const hasAnyValue = rounds.some((r) => r !== "");
 
-  if (!isRecorded) {
+  if (!hasAnyValue) {
     return {
       isRecorded: false,
       round1: "",
@@ -84,6 +90,8 @@ export function calculateSessionAttendance(
       rate: 0,
       displayText: "--",
       statusText: "Chưa ghi nhận",
+      isFullAttendance: false,
+      isAbsent: false,
     };
   }
 
@@ -97,8 +105,35 @@ export function calculateSessionAttendance(
     else if (isLate(r, config)) countM++;
   }
 
+  // Trường hợp 0/3 cũng là vắng mặt (hiển thị là --)
+  if (countX === 0) {
+    return {
+      isRecorded: true,
+      round1: c1,
+      round2: c2,
+      round3: c3,
+      countX: 0,
+      countP,
+      countM,
+      rate: 0,
+      displayText: "--",
+      statusText: "Vắng mặt (0/3)",
+      isFullAttendance: false,
+      isAbsent: true,
+    };
+  }
+
   // Rate = numberOfX / 3 * 100
   const rate = Math.round((countX / 3) * 100 * 10) / 10;
+  const isFullAttendance = countX >= 2;
+  const isAbsent = countX < 2;
+
+  let statusText = "Vắng mặt (0/3)";
+  if (isFullAttendance) {
+    statusText = "Có tham gia học đầy đủ";
+  } else if (isAbsent) {
+    statusText = "Vắng mặt (1/3)";
+  }
 
   return {
     isRecorded: true,
@@ -110,7 +145,9 @@ export function calculateSessionAttendance(
     countM,
     rate,
     displayText: `${countX}/3`,
-    statusText: `${rate}%`,
+    statusText,
+    isFullAttendance,
+    isAbsent,
   };
 }
 
@@ -149,11 +186,15 @@ export function calculateSubjectAttendance(
   let recordedSessions = 0;
 
   for (const sess of sessions) {
-    // If student joined AFTER the session date, skip this session (not applicable)
+    // If student joined AFTER the session date, skip this session unless student actually attended
     if (joinDate && sess.date) {
       const sessDate = parseVNDate(sess.date);
       if (sessDate && joinDate.getTime() > sessDate.getTime()) {
-        continue;
+        const checkEarly = calculateSessionAttendance(sess.round1, sess.round2, sess.round3, config);
+        // If student did not participate (no X/P/M), exempt this session completely
+        if (checkEarly.countX === 0 && checkEarly.countP === 0 && checkEarly.countM === 0) {
+          continue;
+        }
       }
     }
 
@@ -166,15 +207,24 @@ export function calculateSubjectAttendance(
     }
   }
 
+  // Check if subject as a whole was taught before student joined
+  const allSessionsBeforeJoin =
+    !!joinDate &&
+    sessions.length > 0 &&
+    sessions.every((s) => {
+      const d = parseVNDate(s.date);
+      return !d || joinDate.getTime() > d.getTime();
+    });
+
   if (recordedSessions === 0) {
     return {
-      isApplicable: true,
+      isApplicable: !allSessionsBeforeJoin,
       totalX: 0,
       totalP: 0,
       totalM: 0,
       recordedSessions: 0,
-      attendanceRate: 0,
-      displayText: "Chưa ghi nhận",
+      attendanceRate: 100, // Not 0%, never penalized for unenrolled subjects!
+      displayText: allSessionsBeforeJoin ? "Chưa vào lớp" : "Chưa ghi nhận",
       warning: false,
     };
   }

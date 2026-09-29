@@ -149,7 +149,7 @@ export async function getComprehensiveAttendanceReport(): Promise<ComprehensiveA
 
       for (const sess of parsed.sessions) {
         const studentSess = record.sessions[sess.date];
-        if (studentSess && studentSess.isRecorded) {
+        if (studentSess && studentSess.status !== "NOT_APPLICABLE") {
           recordedSessions++;
           let sessX = 0;
           const rounds = [studentSess.round1, studentSess.round2, studentSess.round3];
@@ -161,7 +161,9 @@ export async function getComprehensiveAttendanceReport(): Promise<ComprehensiveA
             } else if (u === "P") countP++;
             else if (u === "M") countM++;
           }
-          if (sessX > 0) {
+          // Tỷ lệ có mặt 2/3 trở lên được tính ngày đó có tham gia học đầy đủ
+          // Trường hợp 0/3 và 1/3 đều là vắng mặt (chỉ tăng attendedSessions khi sessX >= 2)
+          if (sessX >= 2) {
             attendedSessions++;
           }
         }
@@ -256,7 +258,7 @@ export async function getComprehensiveAttendanceReport(): Promise<ComprehensiveA
       teacher: sub.teacher || "Chưa cập nhật",
       sheetName: sub.attendanceSheet,
       totalSessions: sub.totalSessions,
-      recordedSessions: sub.recordedSessionsCount,
+      recordedSessions: sub.recordedSessionsCount || (sheetDataMap.get(sub.attendanceSheet)?.sessions.length || 0),
       totalStudents: students.length,
       applicableStudents: applicableStudents.length,
       averageRate: isNaN(avgRate) ? 0 : avgRate,

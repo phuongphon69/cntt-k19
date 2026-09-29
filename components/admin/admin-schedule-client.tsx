@@ -44,8 +44,8 @@ export function AdminScheduleClient({ initialSchedule, subjects }: AdminSchedule
       dayOfWeek,
       startPeriod,
       endPeriod,
-      startTime: "18:00",
-      endTime: "20:25",
+      startTime: "19:00",
+      endTime: "21:30",
       teacher,
       classUrl,
       sessionType: "Học online",
@@ -96,7 +96,7 @@ export function AdminScheduleClient({ initialSchedule, subjects }: AdminSchedule
                 <th className="p-3.5">Thứ / Ngày</th>
                 <th className="p-3.5">Môn học</th>
                 <th className="p-3.5">Giảng viên</th>
-                <th className="p-3.5">Tiết học</th>
+                <th className="p-3.5">Buổi học</th>
                 <th className="p-3.5">Khung giờ</th>
                 <th className="p-3.5">Link lớp</th>
                 <th className="p-3.5 text-center">Trạng thái</th>
@@ -111,7 +111,9 @@ export function AdminScheduleClient({ initialSchedule, subjects }: AdminSchedule
                   </td>
                   <td className="p-3.5 font-bold text-slate-900 dark:text-white">{item.subjectName}</td>
                   <td className="p-3.5 text-slate-600 dark:text-slate-400">{item.teacher}</td>
-                  <td className="p-3.5 font-medium">Tiết {item.startPeriod} - {item.endPeriod}</td>
+                  <td className="p-3.5 font-medium">
+                    {item.sessionNumber ? `Buổi ${item.sessionNumber}` : "--"}
+                  </td>
                   <td className="p-3.5 text-slate-500">{item.startTime} - {item.endTime}</td>
                   <td className="p-3.5">
                     {item.classUrl ? (

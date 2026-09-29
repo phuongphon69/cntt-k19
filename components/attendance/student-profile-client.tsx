@@ -22,6 +22,17 @@ export function StudentProfileClient({ student, subjectList }: StudentProfileCli
 
   const handleBadgeClick = (sub: Subject, date: string, sessRecord: any) => {
     if (!sessRecord) return;
+    const is0of3 = !sessRecord.isRecorded || sessRecord.rate === 0;
+    const isAbsent1of3 = sessRecord.isRecorded && sessRecord.rate > 0 && sessRecord.rate < 66;
+    const isFullAttended = sessRecord.isRecorded && sessRecord.rate >= 66;
+
+    let displayText = "--";
+    if (is0of3) {
+      displayText = "--";
+    } else {
+      displayText = sessRecord.rate >= 100 ? "3/3" : sessRecord.rate >= 66 ? "2/3" : "1/3";
+    }
+
     setActiveDrawer({
       isOpen: true,
       studentName: student.fullName,
@@ -31,8 +42,15 @@ export function StudentProfileClient({ student, subjectList }: StudentProfileCli
       round2: sessRecord.round2,
       round3: sessRecord.round3,
       rate: sessRecord.rate,
-      displayText: sessRecord.isRecorded ? `${sessRecord.rate}%` : "--",
-      isRecorded: sessRecord.isRecorded,
+      displayText,
+      isRecorded: true,
+      isAbsent: is0of3 || isAbsent1of3,
+      isFullAttendance: isFullAttended,
+      note: is0of3
+        ? "Trường hợp 0/3 cũng là vắng mặt. Học viên không có mặt lần nào trong 3 lần điểm danh của buổi học này."
+        : isAbsent1of3
+        ? "Tính là vắng mặt ngày học này do chỉ có mặt 1/3 lần điểm danh (quy định yêu cầu có mặt từ 2/3 lần điểm danh trở lên mới được tính là có tham gia học đầy đủ)."
+        : "Đạt điều kiện: Có mặt từ 2/3 lần điểm danh trở lên được tính ngày đó có tham gia học đầy đủ.",
     });
   };
 
@@ -99,9 +117,14 @@ export function StudentProfileClient({ student, subjectList }: StudentProfileCli
                 <div className="flex flex-wrap gap-2 pt-1">
                   {sheetSessions.map((s) => {
                     const sessRec = record.sessions[s.date];
-                    const countText = sessRec?.isRecorded
-                      ? `${sessRec.rate >= 100 ? "3/3" : sessRec.rate >= 66 ? "2/3" : sessRec.rate > 0 ? "1/3" : "0/3"}`
-                      : "--";
+                    const isUnrecorded = !sessRec?.isRecorded || sessRec.rate === 0;
+                    const countText = isUnrecorded
+                      ? "--"
+                      : sessRec.rate >= 100
+                      ? "3/3"
+                      : sessRec.rate >= 66
+                      ? "2/3"
+                      : "1/3";
 
                     return (
                       <div
@@ -123,7 +146,7 @@ export function StudentProfileClient({ student, subjectList }: StudentProfileCli
               </div>
             ) : (
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-400 text-center italic">
-                Học viên không nằm trong danh sách đăng ký hoặc được miễn môn học này.
+                Học viên không nằm trong danh sách theo học môn này.
               </div>
             )}
           </div>

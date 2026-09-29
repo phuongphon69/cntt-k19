@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { getSchedule } from "@/lib/google-sheets/reader";
 import { ScheduleItem } from "@/types";
-import { formatDateVN } from "@/lib/utils";
+import { formatDateVN, parseVNDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -67,8 +67,33 @@ export async function GET() {
       }
     }
 
+    // Normalized today midnight for date-only comparison
+    const todayMidnight = new Date(vnDate.getFullYear(), vnDate.getMonth(), vnDate.getDate(), 0, 0, 0, 0);
+
     // Next upcoming class from future days
-    const nextUpcoming = schedule.find((s) => s.date !== todayStr);
+    const futureClasses = schedule
+      .map((item) => ({ item, itemDate: parseVNDate(item.date) }))
+      .filter(({ item, itemDate }) => {
+        if (!itemDate) return false;
+        const d = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate(), 0, 0, 0, 0);
+        if (d.getTime() > todayMidnight.getTime()) return true;
+        if (d.getTime() === todayMidnight.getTime()) {
+          if (item.endTime) {
+            const [eH, eM] = item.endTime.split(":").map((x) => parseInt(x, 10));
+            const endTotal = eH * 60 + eM;
+            return currentTotalMinutes < endTotal;
+          }
+          return true;
+        }
+        return false;
+      })
+      .sort((a, b) => {
+        const timeDiff = (a.itemDate?.getTime() || 0) - (b.itemDate?.getTime() || 0);
+        if (timeDiff !== 0) return timeDiff;
+        return (a.item.startPeriod || 0) - (b.item.startPeriod || 0);
+      });
+
+    const nextUpcoming = futureClasses[0]?.item || null;
 
     return NextResponse.json({
       success: true,

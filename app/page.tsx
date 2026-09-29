@@ -14,7 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { getPublicStudents, getSubjects, getSchedule } from "@/lib/google-sheets/reader";
-import { formatDateVN } from "@/lib/utils";
+import { formatDateVN, parseVNDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +29,42 @@ export default async function HomePage() {
   const vnDate = new Date(vnTimeStr);
   const todayStr = formatDateVN(vnDate);
 
-  const todayClass = schedule.find((s) => s.date === todayStr) || schedule[0];
-  const isActuallyToday = schedule.some((s) => s.date === todayStr);
+  const todayMidnight = new Date(vnDate.getFullYear(), vnDate.getMonth(), vnDate.getDate(), 0, 0, 0, 0);
+
+  // 1. Classes today
+  const todayClasses = schedule.filter((s) => {
+    const d = parseVNDate(s.date);
+    if (!d) return s.date === todayStr;
+    return (
+      d.getDate() === vnDate.getDate() &&
+      d.getMonth() === vnDate.getMonth() &&
+      d.getFullYear() === vnDate.getFullYear()
+    );
+  });
+
+  // 2. Future upcoming classes
+  const futureClasses = schedule
+    .map((item) => ({ item, date: parseVNDate(item.date) }))
+    .filter(({ date }) => {
+      if (!date) return false;
+      const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      return d.getTime() > todayMidnight.getTime();
+    })
+    .sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
+
+  // 3. Past classes
+  const pastClasses = schedule
+    .map((item) => ({ item, date: parseVNDate(item.date) }))
+    .filter(({ date }) => {
+      if (!date) return false;
+      const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      return d.getTime() <= todayMidnight.getTime();
+    })
+    .sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
+
+  const isActuallyToday = todayClasses.length > 0;
+  const isUpcoming = !isActuallyToday && futureClasses.length > 0;
+  const todayClass = todayClasses[0] || futureClasses[0]?.item || pastClasses[0]?.item || null;
 
   // Compute metrics
   const totalStudents = students.length;
@@ -161,9 +195,22 @@ export default async function HomePage() {
         <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  isActuallyToday
+                    ? "bg-emerald-500 animate-pulse"
+                    : isUpcoming
+                    ? "bg-indigo-500 animate-pulse"
+                    : "bg-slate-400"
+                }`}
+              />
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                {isActuallyToday ? "Lịch học hôm nay" : "Lịch học tiếp theo"} ({todayClass.dayOfWeek} - {todayClass.date})
+                {isActuallyToday
+                  ? "Lịch học hôm nay"
+                  : isUpcoming
+                  ? "Lịch học tiếp theo"
+                  : "Buổi học gần nhất vừa qua"}{" "}
+                ({todayClass.dayOfWeek} - {todayClass.date})
               </h2>
             </div>
             <Link
@@ -177,16 +224,25 @@ export default async function HomePage() {
 
           <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="space-y-1.5">
-              <div className="inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
-                {todayClass.subjectName}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                  {todayClass.subjectName}
+                </div>
+                {todayClass.sessionNumber && (
+                  <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                    Buổi {todayClass.sessionNumber}
+                  </span>
+                )}
               </div>
               <div className="text-base font-bold text-slate-900 dark:text-white">
                 Giảng viên: {todayClass.teacher || "Chưa cập nhật"}
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  Tiết {todayClass.startPeriod} - {todayClass.endPeriod} ({todayClass.startTime} - {todayClass.endTime})
+                <span className="flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
+                  <Clock className="w-3.5 h-3.5 text-amber-500" />
+                  {todayClass.startTime === "19:00" && todayClass.endTime === "21:30"
+                    ? "19h00 - 21h30"
+                    : `${todayClass.startTime} - ${todayClass.endTime}`}
                 </span>
                 {todayClass.room && <span>• Phòng: {todayClass.room}</span>}
                 {todayClass.zoomAccount && <span>• {todayClass.zoomAccount}</span>}

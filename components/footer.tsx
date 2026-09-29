@@ -8,7 +8,7 @@ export function Footer() {
     <footer className="w-full border-t border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 py-8 mb-16 md:mb-0">
       <div className="container mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-2">
-          <GraduationCap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          <img src="/logo.png" alt="Logo" className="w-5 h-5 rounded-md object-cover" />
           <span className="font-semibold text-slate-700 dark:text-slate-200">
             Lớp CNTT - K19 CĐ
           </span>

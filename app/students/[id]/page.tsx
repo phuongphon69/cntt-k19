@@ -36,7 +36,7 @@ export default async function StudentDetailPage({ params }: StudentDetailPagePro
       (r) => r.studentId === student.id || r.studentName === student.fullName
     );
 
-    if (rec) {
+    if (rec && rec.isApplicable && rec.recordedSessions > 0) {
       grandTotalX += rec.totalX;
       grandTotalP += rec.totalP;
       grandTotalM += rec.totalM;

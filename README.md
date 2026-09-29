@@ -7,7 +7,7 @@ Hệ thống web production-ready toàn diện phục vụ quản lý chuyên c�
 ## 🌟 Tính Năng Nổi Bật
 
 1. **Kết nối Google Sheets hai chiều**:
-   - Đọc tự động các sheet `DANH SÁCH LỚP`, `TKB`, `DD CHÍNH TRỊ`, `DD TIN HỌC`, `DD TIẾNG ANH`, `DD GDTC` và bất kỳ sheet `DD *` nào mới thêm.
+   - Đọc tự động các sheet `CNTT - K19`, `TKB`, `DD CHÍNH TRỊ`, `DD TIN HỌC`, `DD TIẾNG ANH`, `DD GDTC` và bất kỳ sheet `DD *` nào mới thêm.
    - Cơ chế ghi cell chính xác theo cột Lần và hàng sinh viên mà không ghi đè toàn bộ sheet, không phá công thức, không đổi thứ tự dòng.
    - Cache thông minh 45 giây với nút "Đồng bộ ngay" tức thì.
 2. **Điểm danh bằng ảnh chụp Zoom OCR**:
@@ -18,7 +18,7 @@ Hệ thống web production-ready toàn diện phục vụ quản lý chuyên c�
    - Phát hiện xung đột dữ liệu cũ (ví dụ ô đang có `P` vs OCR `X`) và hiển thị preview trước khi ghi.
 3. **Quản lý Môn học & Tự động tạo Sheet**:
    - Thêm môn học mới mọi lúc trên giao diện Admin.
-   - Tự động nhân bản sheet `MẪU MÔN HỌC` thành `DD <TÊN MÔN>` và nạp 100% sinh viên Active từ `DANH SÁCH LỚP` mà không cần sửa source code.
+   - Tự động nhân bản sheet `MẪU MÔN HỌC` thành `DD <TÊN MÔN>` và nạp 100% sinh viên Active từ `CNTT - K19` mà không cần sửa source code.
 4. **Thời khóa biểu & Tiết học**:
    - Xem TKB dạng danh sách và dạng tuần trực quan.
    - Nút "VÀO LỚP" trực tiếp mở link Zoom/Google Meet.
@@ -108,14 +108,60 @@ Truy cập ứng dụng tại: `http://localhost:3000`
 
 ---
 
+## 📲 Hướng Dẫn Đưa App Ra Màn Hình Chính Điện Thoại (PWA)
+
+Ứng dụng hỗ trợ công nghệ **Progressive Web App (PWA)**, cho phép mọi người trong lớp cài đặt trực tiếp lên màn hình điện thoại như một App tải từ App Store / Google Play, mở toàn màn hình và không cần nhập địa chỉ web trên trình duyệt:
+
+### Dành cho iPhone / iPad (Safari):
+1. Mở link trang web trên trình duyệt **Safari**.
+2. Bấm vào biểu tượng **Chia sẻ** (Hình vuông có mũi tên hướng lên `⎋`) ở thanh công cụ dưới đáy màn hình.
+3. Cuộn xuống và chọn **"Thêm vào MH chính"** (*Add to Home Screen* ➕).
+4. Bấm **"Thêm"** (*Add*) ở góc trên bên phải. Biểu tượng **CNTT K19** sẽ xuất hiện trên màn hình điện thoại!
+
+### Dành cho Android (Chrome / Cốc Cốc):
+1. Mở link trang web trên trình duyệt **Chrome**.
+2. Hệ thống sẽ tự động hiện thông báo **"Cài đặt ứng dụng"** hoặc bấm vào dấu **3 chấm (⋮)** ở góc trên bên phải.
+3. Chọn **"Cài đặt ứng dụng"** hoặc **"Thêm vào màn hình chính"**.
+4. Bấm xác nhận, ứng dụng sẽ xuất hiện trong danh sách App của máy.
+
+---
+
+## 🔗 Chia Sẻ Link Lớp Học Cho Cả Lớp
+
+- Bấm vào nút **"Gửi Link"** ở góc trên thanh công cụ Navbar hoặc trong menu di động.
+- Hệ thống hỗ trợ:
+  - **Sao chép đường link** chỉ với 1 click để gửi vào nhóm Zalo / Messenger lớp.
+  - **Mã QR Code động**: Giảng viên hoặc lớp trưởng có thể chiếu mã QR lên màn hình/máy chiếu để các bạn trong lớp bật camera điện thoại quét và vào lớp ngay lập tức.
+  - **Nút gửi trực tiếp qua Zalo / Tin nhắn** thông qua Web Share API của điện thoại.
+
+---
+
+## 💾 Sao Lưu Kết Quả Điểm Danh Ra Google Sheet
+
+- Truy cập mục **Quản trị ➔ Sao lưu Google Sheet** (`/admin/backup`).
+- Bấm **"Sao lưu lên Google Sheet"** để tự động đồng bộ kết quả điểm danh, số buổi tham gia và tỷ lệ chuyên cần của toàn bộ học viên vào sheet `SAO_LUU_DIEM_DANH`.
+- Có thể tải file **Excel / CSV chuẩn UTF-8 BOM** không bị lỗi font hoặc file JSON sao lưu hệ thống.
+
+---
+
+## 📊 Quy Tắc Điểm Danh & Tính Chuyên Cần
+- **Đánh giá theo từng buổi học**: Mỗi buổi học gồm 3 lần điểm danh (Lần 1, Lần 2, Lần 3).
+  - Có mặt $\ge$ 2/3 lần (ví dụ: `2/3` hoặc `3/3`): Tính là **Có tham gia học đầy đủ** (`PRESENT`).
+  - Có mặt `1/3`: Tính là **Vắng mặt** (`ABSENT`).
+  - Có mặt `0/3`: Tính là **Vắng mặt** (`ABSENT`).
+  - Buổi chưa diễn ra: Hiển thị `--` và không tính vào tỷ lệ.
+- **Tự động liên kết TKB**: Khi giảng viên hoặc ban cán sự thêm môn mới hoặc bổ sung buổi học bên sheet `TKB`, hệ thống tự động phát hiện, đồng bộ số buổi và nạp toàn bộ danh sách ngày học vào mục điểm danh mà không cần cấu hình thủ công.
+
+---
+
 ## 🧪 Chạy Kiểm Thử (Unit Tests)
 
 ```bash
 npm run test
 ```
-Bộ kiểm thử bao gồm:
-- Tính toán điểm danh theo chuẩn yêu cầu (X X X -> 100%, X X M -> 66.7%, X P M -> 33.3%, bỏ qua buổi trống).
-- Chuẩn hóa tên tiếng Việt và loại bỏ dấu.
-- Bóc tách chuỗi tên Zoom và thuật toán Fuzzy Matching.
-- Phát hiện và giải quyết xung đột dữ liệu.
-- Kiểm tra loại trừ sinh viên chưa tham gia môn ("Không áp dụng").
+Toàn bộ 31 unit tests tự động kiểm thử:
+- Quy tắc chuyên cần: `0/3` vắng mặt, `1/3` vắng mặt, `2/3` trở lên có mặt đầy đủ.
+- Đồng bộ và tích lũy môn học / số buổi từ TKB.
+- Bóc tách chuỗi tên Zoom OCR, loại bỏ nhãn và đối chiếu danh sách sinh viên.
+- Cơ chế sao lưu kết quả điểm danh ra Google Sheet và file CSV UTF-8 BOM.
+- Quản lý và bảo vệ thông tin cá nhân của sinh viên.

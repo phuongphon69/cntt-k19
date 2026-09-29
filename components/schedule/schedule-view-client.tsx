@@ -43,8 +43,9 @@ function parseItemDate(dateStr: string): Date | null {
   if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
     return null;
   }
+  const year = parts[2] < 100 ? 2000 + parts[2] : parts[2];
   // parts[0] = day, parts[1] = month, parts[2] = year
-  return new Date(parts[2], parts[1] - 1, parts[0]);
+  return new Date(year, parts[1] - 1, parts[0]);
 }
 
 function formatDateDisplay(d: Date): string {
@@ -87,18 +88,12 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(defaultMonthKey);
 
-  // 2. Filter items by selected Month, Subject, and Search query
+  // 2. Filter items by Subject and Search query (WITHOUT month restriction)
+  // This ensures weeks spanning across month boundaries (e.g. 28/09 - 04/10) retain all sessions!
   const cleanQ = normalizeVietnameseNameWithoutAccent(searchQuery);
 
-  const monthFilteredSchedule = useMemo(() => {
+  const queryFilteredSchedule = useMemo(() => {
     return schedule.filter((item) => {
-      if (selectedMonthKey !== "ALL") {
-        const d = parseItemDate(item.date);
-        if (!d) return false;
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        if (key !== selectedMonthKey) return false;
-      }
-
       if (subjectFilter !== "ALL" && item.subjectName !== subjectFilter) {
         return false;
       }
@@ -114,12 +109,73 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
 
       return true;
     });
-  }, [schedule, selectedMonthKey, subjectFilter, cleanQ]);
+  }, [schedule, subjectFilter, cleanQ]);
 
-  // 3. Generate Weeks for the selected Month
+  // Month-filtered schedule specifically for Month view and List view
+  const monthFilteredSchedule = useMemo(() => {
+    return queryFilteredSchedule.filter((item) => {
+      if (selectedMonthKey !== "ALL") {
+        const d = parseItemDate(item.date);
+        if (!d) return false;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        if (key !== selectedMonthKey) return false;
+      }
+      return true;
+    });
+  }, [queryFilteredSchedule, selectedMonthKey]);
+
+  // 3. Generate Weeks for the selected Month (or all weeks if "ALL")
   const weeksOfMonth = useMemo<WeekInfo[]>(() => {
     if (selectedMonthKey === "ALL") {
-      return [];
+      const dates = schedule
+        .map((s) => parseItemDate(s.date))
+        .filter((d): d is Date => d !== null)
+        .sort((a, b) => a.getTime() - b.getTime());
+
+      if (dates.length === 0) return [];
+
+      const minDate = dates[0];
+      const maxDate = dates[dates.length - 1];
+
+      let currentMonday = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
+      const dayOfWeek = currentMonday.getDay();
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      currentMonday.setDate(currentMonday.getDate() + diffToMonday);
+
+      const weeks: WeekInfo[] = [];
+      let weekNum = 1;
+
+      while (currentMonday <= maxDate) {
+        const currentSunday = new Date(currentMonday);
+        currentSunday.setDate(currentSunday.getDate() + 6);
+
+        const monTime = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate(), 0, 0, 0, 0).getTime();
+        const sunTime = new Date(currentSunday.getFullYear(), currentSunday.getMonth(), currentSunday.getDate(), 23, 59, 59, 999).getTime();
+
+        const itemsInWeek = queryFilteredSchedule.filter((item) => {
+          const d = parseItemDate(item.date);
+          if (!d) return false;
+          const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).getTime();
+          return t >= monTime && t <= sunTime;
+        });
+
+        const label = `Tuần ${weekNum} (${formatDateDisplay(currentMonday)} - ${formatDateDisplay(currentSunday)})`;
+        weeks.push({
+          weekNumber: weekNum,
+          label,
+          startDate: new Date(currentMonday),
+          endDate: new Date(currentSunday),
+          startDateStr: formatDateDisplay(currentMonday),
+          endDateStr: formatDateDisplay(currentSunday),
+          items: itemsInWeek,
+        });
+
+        currentMonday = new Date(currentMonday);
+        currentMonday.setDate(currentMonday.getDate() + 7);
+        weekNum++;
+      }
+
+      return weeks;
     }
 
     const [yearStr, monthStr] = selectedMonthKey.split("-");
@@ -137,15 +193,20 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
     currentMonday.setDate(currentMonday.getDate() + diffToMonday);
 
     let weekNum = 1;
-    while (currentMonday <= lastDay || (weeks.length > 0 && currentMonday.getMonth() === month)) {
+    while (currentMonday <= lastDay) {
       const currentSunday = new Date(currentMonday);
       currentSunday.setDate(currentSunday.getDate() + 6);
 
-      // Collect items falling in this week
-      const itemsInWeek = monthFilteredSchedule.filter((item) => {
+      const monTime = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate(), 0, 0, 0, 0).getTime();
+      const sunTime = new Date(currentSunday.getFullYear(), currentSunday.getMonth(), currentSunday.getDate(), 23, 59, 59, 999).getTime();
+
+      // Collect items falling in this week from queryFilteredSchedule so crossing-month items
+      // (like 01/10, 02/10, 03/10 in week 28/09 - 04/10) are NEVER lost!
+      const itemsInWeek = queryFilteredSchedule.filter((item) => {
         const d = parseItemDate(item.date);
         if (!d) return false;
-        return d >= currentMonday && d <= currentSunday;
+        const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).getTime();
+        return t >= monTime && t <= sunTime;
       });
 
       const label = `Tuần ${weekNum} (${formatDateDisplay(currentMonday)} - ${formatDateDisplay(currentSunday)})`;
@@ -163,28 +224,70 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
       currentMonday = new Date(currentMonday);
       currentMonday.setDate(currentMonday.getDate() + 7);
       weekNum++;
-
-      if (currentMonday.getMonth() !== month && currentMonday > lastDay) {
-        break;
-      }
     }
 
     return weeks;
-  }, [selectedMonthKey, monthFilteredSchedule]);
+  }, [selectedMonthKey, queryFilteredSchedule, schedule]);
 
-  // Selected week index
-  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number>(0);
+  // Find current week index in the active month
+  const currentWeekIndexInMonth = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return weeksOfMonth.findIndex((w) => {
+      const s = new Date(w.startDate);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(w.endDate);
+      e.setHours(23, 59, 59, 999);
+      return today >= s && today <= e;
+    });
+  }, [weeksOfMonth]);
+
+  // Default week index: prioritize current week, then first week with classes, then 0
+  const defaultWeekIndex = useMemo(() => {
+    if (weeksOfMonth.length === 0) return 0;
+    if (currentWeekIndexInMonth !== -1) {
+      return currentWeekIndexInMonth;
+    }
+    const hasItemsIdx = weeksOfMonth.findIndex((w) => w.items.length > 0);
+    return hasItemsIdx !== -1 ? hasItemsIdx : 0;
+  }, [weeksOfMonth, currentWeekIndexInMonth]);
+
+  // Selected week index: null means follow defaultWeekIndex (prioritizing current week)
+  const [userSelectedWeekIndex, setUserSelectedWeekIndex] = useState<number | null>(null);
+
+  const selectedWeekIndex =
+    userSelectedWeekIndex !== null && userSelectedWeekIndex >= 0 && userSelectedWeekIndex < weeksOfMonth.length
+      ? userSelectedWeekIndex
+      : defaultWeekIndex;
+
   const activeWeek = weeksOfMonth[selectedWeekIndex] || weeksOfMonth[0];
+
+  const studySessionsCount = useMemo(() => {
+    if (!activeWeek) return 0;
+    return activeWeek.items.filter(
+      (item) => !item.subjectName.toLowerCase().includes("nghỉ")
+    ).length;
+  }, [activeWeek]);
+
+  const dayOffCount = useMemo(() => {
+    if (!activeWeek) return 0;
+    return activeWeek.items.length - studySessionsCount;
+  }, [activeWeek, studySessionsCount]);
 
   // Extract unique subjects for dropdown
   const uniqueSubjects = Array.from(new Set(schedule.map((s) => s.subjectName))).filter(Boolean);
 
   // Handlers for month/week navigation
+  const handleSelectMonth = (monthKey: string) => {
+    setSelectedMonthKey(monthKey);
+    setUserSelectedWeekIndex(null);
+  };
+
   const handlePrevMonth = () => {
     const idx = availableMonths.findIndex((m) => m.key === selectedMonthKey);
     if (idx > 0) {
       setSelectedMonthKey(availableMonths[idx - 1].key);
-      setSelectedWeekIndex(0);
+      setUserSelectedWeekIndex(null);
     }
   };
 
@@ -192,8 +295,16 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
     const idx = availableMonths.findIndex((m) => m.key === selectedMonthKey);
     if (idx >= 0 && idx < availableMonths.length - 1) {
       setSelectedMonthKey(availableMonths[idx + 1].key);
-      setSelectedWeekIndex(0);
+      setUserSelectedWeekIndex(null);
     }
+  };
+
+  const handleGoToCurrentWeek = () => {
+    if (availableMonths.some((m) => m.key === currentMonthKey)) {
+      setSelectedMonthKey(currentMonthKey);
+    }
+    setUserSelectedWeekIndex(null);
+    setViewMode("week");
   };
 
   // Day columns for Week view (Thứ 2 -> Chủ Nhật)
@@ -261,23 +372,26 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
                 <button
                   key={m.key}
                   type="button"
-                  onClick={() => {
-                    setSelectedMonthKey(m.key);
-                    setSelectedWeekIndex(0);
-                  }}
+                  onClick={() => handleSelectMonth(m.key)}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     selectedMonthKey === m.key
                       ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
                       : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                   }`}
                 >
-                  {m.label}
+                  <span>{m.label}</span>
+                  {m.key === currentMonthKey && (
+                    <span className="ml-1 text-[10px] opacity-90 font-bold">• Hiện tại</span>
+                  )}
                 </button>
               ))}
 
               <button
                 type="button"
-                onClick={() => setSelectedMonthKey("ALL")}
+                onClick={() => {
+                  setSelectedMonthKey("ALL");
+                  setUserSelectedWeekIndex(null);
+                }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                   selectedMonthKey === "ALL"
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
@@ -302,8 +416,24 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
             </button>
           </div>
 
-          {/* View Mode Switcher */}
-          <div className="flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 self-start md:self-auto">
+          <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+            {/* Quick button to jump to Current Week */}
+            <button
+              type="button"
+              onClick={handleGoToCurrentWeek}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold transition-all ${
+                selectedMonthKey === currentMonthKey && selectedWeekIndex === currentWeekIndexInMonth && viewMode === "week"
+                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/20"
+                  : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
+              }`}
+              title="Nhảy nhanh đến tuần hiện tại"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Tuần hiện tại</span>
+            </button>
+
+            {/* View Mode Switcher */}
+            <div className="flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
             <button
               type="button"
               onClick={() => setViewMode("week")}
@@ -344,8 +474,9 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Filter and Search Inputs */}
+      {/* Filter and Search Inputs */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -383,39 +514,71 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
             <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300">
               <CalendarDays className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Chọn tuần trong tháng:</span>
+              {selectedWeekIndex === currentWeekIndexInMonth && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  Đang xem tuần hiện tại
+                </span>
+              )}
             </div>
 
             <div className="text-xs font-semibold text-slate-500">
-              Tuần đang xem có <strong>{activeWeek?.items.length || 0}</strong> buổi học
+              Tuần đang xem có <strong>{studySessionsCount}</strong> buổi học
+              {dayOffCount > 0 && (
+                <span className="text-amber-600 dark:text-amber-400 font-medium ml-1">
+                  ({dayOffCount} ngày nghỉ)
+                </span>
+              )}
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {weeksOfMonth.map((w, idx) => (
-              <button
-                key={w.weekNumber}
-                type="button"
-                onClick={() => setSelectedWeekIndex(idx)}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  selectedWeekIndex === idx
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                    : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-indigo-100/50 border border-indigo-100/60 dark:border-indigo-900/40"
-                }`}
-              >
-                <span>{w.label}</span>
-                {w.items.length > 0 && (
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                      selectedWeekIndex === idx
-                        ? "bg-white text-indigo-700"
-                        : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300"
-                    }`}
-                  >
-                    {w.items.length}
-                  </span>
-                )}
-              </button>
-            ))}
+            {weeksOfMonth.map((w, idx) => {
+              const isCurrentWeek = idx === currentWeekIndexInMonth;
+              const isSelected = selectedWeekIndex === idx;
+
+              return (
+                <button
+                  key={w.weekNumber}
+                  type="button"
+                  onClick={() => setUserSelectedWeekIndex(idx)}
+                  className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    isSelected
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                      : isCurrentWeek
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-2 border-emerald-400 dark:border-emerald-600 hover:bg-emerald-100/70"
+                      : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-indigo-100/50 border border-indigo-100/60 dark:border-indigo-900/40"
+                  }`}
+                >
+                  <span>{w.label}</span>
+
+                  {isCurrentWeek && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                        isSelected
+                          ? "bg-white/20 text-white"
+                          : "bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200"
+                      }`}
+                    >
+                      Hiện tại
+                    </span>
+                  )}
+
+                  {w.items.length > 0 && (
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                        isSelected
+                          ? "bg-white text-indigo-700"
+                          : isCurrentWeek
+                          ? "bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200"
+                          : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300"
+                      }`}
+                    >
+                      {w.items.filter((it) => !it.subjectName.toLowerCase().includes("nghỉ")).length || w.items.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -461,46 +624,78 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
                 {/* Day Items */}
                 <div className="space-y-2.5 flex-1">
                   {day.items.length > 0 ? (
-                    day.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700 shadow-xs space-y-2"
-                      >
-                        <div className="space-y-0.5">
-                          <h4 className="font-extrabold text-xs text-slate-900 dark:text-white line-clamp-2">
-                            {item.subjectName}
-                          </h4>
-                          <span className="inline-block text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                            Tiết {item.startPeriod}-{item.endPeriod}
-                          </span>
-                        </div>
+                    day.items.map((item) => {
+                      const isDayOff =
+                        item.subjectName.toLowerCase().includes("nghỉ") ||
+                        item.subjectId.includes("nghi");
 
-                        <div className="text-[11px] text-slate-500 space-y-0.5">
-                          <div className="flex items-center gap-1 truncate">
-                            <User className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{item.teacher || "Chưa cập nhật"}</span>
+                      if (isDayOff) {
+                        return (
+                          <div
+                            key={item.id}
+                            className="p-3 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 shadow-xs space-y-1.5 text-center py-4 transition-all"
+                          >
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-900/80 dark:text-amber-200 uppercase tracking-wide">
+                              {item.subjectName}
+                            </span>
+                            {item.note ? (
+                              <p className="text-[11px] text-amber-700 dark:text-amber-300 italic">
+                                {item.note}
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-amber-600/80 dark:text-amber-400/80">
+                                Lịch nghỉ theo TKB
+                              </p>
+                            )}
                           </div>
-                          <div className="flex items-center gap-1 font-mono text-[10px] text-slate-600 dark:text-slate-300">
-                            <Clock className="w-3 h-3 text-amber-500 shrink-0" />
-                            <span>
-                              {item.startTime}-{item.endTime}
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700 shadow-xs space-y-2"
+                        >
+                          <div className="space-y-0.5">
+                            <h4 className="font-extrabold text-xs text-slate-900 dark:text-white line-clamp-2">
+                              {item.subjectName}
+                            </h4>
+                            <span className="inline-block text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                              {item.sessionNumber
+                                ? `Buổi ${item.sessionNumber}`
+                                : "19h00 - 21h30"}
                             </span>
                           </div>
-                        </div>
 
-                        {item.classUrl && (
-                          <a
-                            href={item.classUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl font-bold text-[11px] text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-all"
-                          >
-                            <Video className="w-3 h-3" />
-                            <span>VÀO LỚP</span>
-                          </a>
-                        )}
-                      </div>
-                    ))
+                          <div className="text-[11px] text-slate-500 space-y-0.5">
+                            <div className="flex items-center gap-1 truncate">
+                              <User className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="truncate">{item.teacher || "Chưa cập nhật"}</span>
+                            </div>
+                            <div className="flex items-center gap-1 font-mono text-[10px] text-slate-600 dark:text-slate-300">
+                              <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                              <span>
+                                {item.startTime === "19:00" && item.endTime === "21:30"
+                                  ? "19h00 - 21h30"
+                                  : `${item.startTime} - ${item.endTime}`}
+                              </span>
+                            </div>
+                          </div>
+
+                          {item.classUrl && (
+                            <a
+                              href={item.classUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl font-bold text-[11px] text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-all"
+                            >
+                              <Video className="w-3 h-3" />
+                              <span>VÀO LỚP</span>
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <div className="py-8 text-center text-slate-300 dark:text-slate-700 text-xs italic">
                       Nghỉ
@@ -528,9 +723,17 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
                       <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
                         {item.dayOfWeek} • {item.date}
                       </span>
-                      <span className="text-xs font-semibold text-slate-500">
-                        Tiết {item.startPeriod}-{item.endPeriod}
-                      </span>
+                      {item.subjectName.toLowerCase().includes("nghỉ") ? (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                          Nghỉ học
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md">
+                          {item.sessionNumber
+                            ? `Buổi ${item.sessionNumber}`
+                            : "Lịch học"}
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -543,7 +746,9 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
                     <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
                       <Clock className="w-3.5 h-3.5 text-amber-500" />
                       <span>
-                        {item.startTime} - {item.endTime}
+                        {item.startTime === "19:00" && item.endTime === "21:30"
+                          ? "19h00 - 21h30"
+                          : `${item.startTime} - ${item.endTime}`}
                       </span>
                     </div>
                   </div>
@@ -597,9 +802,17 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
                       <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
                         {item.subjectName}
                       </h3>
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        Tiết {item.startPeriod} - {item.endPeriod}
-                      </span>
+                      {item.subjectName.toLowerCase().includes("nghỉ") ? (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                          Nghỉ học
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                          {item.sessionNumber
+                            ? `Buổi ${item.sessionNumber}`
+                            : "Lịch học"}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-500">
@@ -615,7 +828,9 @@ export function ScheduleViewClient({ schedule }: ScheduleViewClientProps) {
                       )}
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-amber-500" />
-                        {item.startTime} - {item.endTime}
+                        {item.startTime === "19:00" && item.endTime === "21:30"
+                          ? "19h00 - 21h30"
+                          : `${item.startTime} - ${item.endTime}`}
                       </span>
                       {item.room && (
                         <span className="flex items-center gap-1">
