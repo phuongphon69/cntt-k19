@@ -142,8 +142,9 @@ export function parseAttendanceSheet(
       }
     }
 
-    // Stop if column has neither TKB date, nor cell date, nor session label, nor student marks
-    if (!hasTkbDate && !hasCellDate && !hasSessionLabel && !hasStudentData) {
+    // If the column does not have a TKB date, does not have a real date in the sheet,
+    // and has NO student attendance marks, it is an empty dummy column from the template. STOP!
+    if (!hasTkbDate && !hasCellDate && !hasStudentData) {
       break;
     }
 

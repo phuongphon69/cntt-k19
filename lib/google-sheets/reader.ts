@@ -63,6 +63,16 @@ export async function fetchSheetMatrix(sheetName: string): Promise<any[][]> {
     const cols = parsed.table?.cols || [];
     const rows = parsed.table?.rows || [];
 
+    // If the requested sheet is NOT "TKB", check if GViz fell back to TKB because sheet does not exist
+    if (sheetName.trim().toUpperCase() !== "TKB") {
+      const isTkbFallback = cols.some((c: any) =>
+        String(c?.label || "").toUpperCase().includes("THỜI KHÓA BIỂU")
+      );
+      if (isTkbFallback) {
+        return [];
+      }
+    }
+
     const matrix: any[][] = [];
 
     // Check if column labels contain header row data
@@ -137,12 +147,9 @@ export async function getWorkbookSheetNames(): Promise<string[]> {
           }
         }
         if (scraped.length > 0) {
-          // Also ensure default sheets and custom subjects are included
-          const customNames = getCustomSubjects().map((s) => s.sheetName || `DD ${s.name.toUpperCase()}`);
-          const createdNames = getCreatedSheets();
-          const merged = Array.from(new Set([...scraped, ...customNames, ...createdNames]));
-          setCached(cacheKey, merged);
-          return merged;
+          // Scraped contains the true list of sheets currently existing in Google Sheets
+          setCached(cacheKey, scraped);
+          return scraped;
         }
       }
     } catch (scrapeErr) {
@@ -150,21 +157,19 @@ export async function getWorkbookSheetNames(): Promise<string[]> {
     }
   }
 
-  // Fallback 2: Known default sheets + custom subjects
-  const customNames = getCustomSubjects().map((s) => s.sheetName || `DD ${s.name.toUpperCase()}`);
-  const createdNames = getCreatedSheets();
+  // Fallback 2: Known core default sheets
   const defaultSheets = Array.from(
     new Set([
       "TKB",
       "CNTT - K19",
+      "DANH SÁCH LỚP",
       "DD CHÍNH TRỊ",
       "DD TIN HỌC",
       "DD TIẾNG ANH",
       "DD GDTC",
       "MẪU MÔN HỌC",
       "TỔNG HỢP",
-      ...customNames,
-      ...createdNames,
+      ...getCreatedSheets(),
     ])
   );
   setCached(cacheKey, defaultSheets);
@@ -403,21 +408,22 @@ export async function getSubjects(): Promise<Subject[]> {
   const processedTkbIds = new Set<string>();
 
   // Helper to match subject IDs with aliases
-  const matchTkbKey = (targetId: string, sheetTitle: string, subjectName: string): string | null => {
+  const matchTkbKey = (targetId: string, sheetTitle: string): string | null => {
     const targetNorm = normalizeVietnameseNameWithoutAccent(targetId).toLowerCase().replace(/\s+/g, "_");
     const sheetNorm = normalizeVietnameseNameWithoutAccent(sheetTitle).toLowerCase().replace(/\s+/g, "_");
-    const nameNorm = normalizeVietnameseNameWithoutAccent(subjectName).toLowerCase().replace(/\s+/g, "_");
 
     for (const key of Array.from(tkbMap.keys())) {
       const keyNorm = normalizeVietnameseNameWithoutAccent(key).toLowerCase().replace(/\s+/g, "_");
       if (
         keyNorm === targetNorm ||
         keyNorm === sheetNorm ||
-        keyNorm === nameNorm ||
-        (keyNorm.includes("the_chat") && (targetNorm.includes("gdtc") || sheetNorm.includes("gdtc") || nameNorm.includes("the_chat"))) ||
-        (keyNorm.includes("chinh_tri") && (targetNorm.includes("chinh_tri") || nameNorm.includes("chinh_tri"))) ||
-        (keyNorm.includes("tin_hoc") && (targetNorm.includes("tin_hoc") || nameNorm.includes("tin_hoc"))) ||
-        (keyNorm.includes("tieng_anh") && (targetNorm.includes("tieng_anh") || nameNorm.includes("tieng_anh")))
+        (keyNorm.includes("the_chat") && (targetNorm.includes("gdtc") || sheetNorm.includes("gdtc"))) ||
+        (keyNorm.includes("chinh_tri") && (targetNorm.includes("chinh_tri") || sheetNorm.includes("chinh_tri"))) ||
+        (keyNorm === "tin_hoc" && (targetNorm === "tin_hoc" || sheetNorm === "tin_hoc")) ||
+        (keyNorm.includes("tieng_anh") && (targetNorm.includes("tieng_anh") || sheetNorm.includes("tieng_anh"))) ||
+        (keyNorm.includes("phap_luat") && (targetNorm.includes("phap_luat") || sheetNorm.includes("phap_luat"))) ||
+        (keyNorm.includes("ky_thuat_lap_trinh") && (targetNorm.includes("ky_thuat_lap_trinh") || sheetNorm.includes("ky_thuat_lap_trinh"))) ||
+        (keyNorm.includes("cau_truc_du_lieu") && (targetNorm.includes("cau_truc_du_lieu") || sheetNorm.includes("cau_truc_du_lieu")))
       ) {
         return key;
       }
@@ -431,8 +437,8 @@ export async function getSubjects(): Promise<Subject[]> {
     const cleanSheetTitle = sheetName.replace(/^DD\s+/i, "").trim();
     const id = normalizeVietnameseNameWithoutAccent(cleanSheetTitle).toLowerCase().replace(/\s+/g, "_");
 
-    // Match with TKB
-    const tkbKey = matchTkbKey(id, cleanSheetTitle, parsed.subjectName);
+    // Match strictly with TKB by sheet title
+    const tkbKey = matchTkbKey(id, cleanSheetTitle);
     const tkbInfo = tkbKey ? tkbMap.get(tkbKey) : null;
     if (tkbKey) processedTkbIds.add(tkbKey);
 
@@ -449,8 +455,8 @@ export async function getSubjects(): Promise<Subject[]> {
 
     // Check for accumulated sessions override (saved during sync) or sync with TKB
     const override = getSessionOverride(sheetName) ?? getSessionOverride(id);
-    const maxSessions = Math.max(parsed.totalSessions || 0, tkbInfo?.count || 0);
-    const finalTotalSessions = override !== null ? override : (maxSessions > 0 ? maxSessions : 12);
+    const maxSessions = tkbInfo?.count || parsed.sessions.length || parsed.totalSessions || 12;
+    const finalTotalSessions = override !== null ? override : maxSessions;
 
     const getDayOfWeek = (dStr: string) => {
       const d = parseVNDate(dStr);
@@ -489,22 +495,33 @@ export async function getSubjects(): Promise<Subject[]> {
 
     const sessionDates = Array.from(dateMap.values()).sort((a, b) => a.index - b.index);
 
+    // Count sessions that actually have attendance marked
+    const actuallyRecordedCount = parsed.sessions.filter((sess) =>
+      parsed.records.some((rec) => {
+        const s = rec.sessions[sess.date];
+        return s && s.isRecorded && (s.round1 || s.round2 || s.round3);
+      })
+    ).length;
+
+    // Subject display name: prioritize TKB official name or clean sheet title
+    const displayName = tkbInfo?.name || cleanSheetTitle;
+
     subjects.push({
       id,
       code: id.toUpperCase().slice(0, 10),
-      name: parsed.subjectName || cleanSheetTitle,
-      shortName: parsed.subjectName || cleanSheetTitle,
+      name: displayName,
+      shortName: displayName,
       attendanceSheet: sheetName,
-      teacher: parsed.teacherName || tkbInfo?.teacher || "Chưa cập nhật",
+      teacher: tkbInfo?.teacher || parsed.teacherName || "Chưa cập nhật",
       teacherPhone: tkbInfo?.phone || "",
       totalSessions: finalTotalSessions,
       status: "ACTIVE",
       isPublic: true,
-      recordedSessionsCount: parsed.sessions.length,
+      recordedSessionsCount: actuallyRecordedCount,
       averageAttendanceRate: avgRate,
       hasSheet: true,
       tkbSessionsCount: tkbInfo?.count,
-      enrolledStudentsCount: parsed.records.length,
+      enrolledStudentsCount: totalClassStudents,
       totalClassStudents: totalClassStudents,
       sessionDates,
     });
@@ -669,15 +686,25 @@ export async function getAttendanceSheetData(sheetName: string): Promise<ParsedA
   const classStudents = await getStudents();
   parsed.totalClassStudents = classStudents.length;
 
-  // Ensure all students from master class roster are included in parsed records
+  // Reconcile records strictly against official class roster (43 students)
+  const officialRecords: StudentAttendanceRecord[] = [];
   for (const cs of classStudents) {
-    const exists = parsed.records.some(
+    const existing = parsed.records.find(
       (r) =>
         r.studentId === cs.id ||
         normalizeVietnameseNameWithoutAccent(r.studentName).replace(/\s+/g, "_") === cs.id
     );
-    if (!exists) {
-      parsed.records.push({
+    if (existing) {
+      officialRecords.push({
+        ...existing,
+        studentId: cs.id,
+        studentName: cs.fullName,
+        dateOfBirth: cs.dateOfBirth,
+        studySystem: cs.studySystem,
+        dateJoinedGroup: cs.dateJoinedGroup,
+      });
+    } else {
+      officialRecords.push({
         studentId: cs.id,
         studentName: cs.fullName,
         dateOfBirth: cs.dateOfBirth,
@@ -694,7 +721,8 @@ export async function getAttendanceSheetData(sheetName: string): Promise<ParsedA
       });
     }
   }
-  parsed.enrolledStudentsCount = parsed.records.length;
+  parsed.records = officialRecords;
+  parsed.enrolledStudentsCount = classStudents.length;
 
   // 5. Overlay any confirmed attendance rounds from persistent sync-store
   const recordedRounds = getRecordedAttendanceRounds(sheetName);
