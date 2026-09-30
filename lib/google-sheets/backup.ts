@@ -485,19 +485,21 @@ function doPost(e) {
       if (!masterSheet) return [];
       var values = masterSheet.getDataRange().getValues();
       var roster = [];
-      var startRow = 1;
+      var headerRowIdx = -1;
       for (var r = 0; r < Math.min(5, values.length); r++) {
         var rowStr = values[r].join(" ").toUpperCase();
         if (rowStr.indexOf("HỌ VÀ") !== -1 || rowStr.indexOf("TÊN") !== -1) {
-          startRow = r + 1;
+          headerRowIdx = r;
           break;
         }
       }
+      var startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 1;
       for (var r = startRow; r < values.length; r++) {
         var row = values[r];
         var hoVa = String(row[1] || "").trim();
         var ten = String(row[2] || "").trim();
         if (!hoVa && !ten) continue;
+        if (hoVa.toUpperCase().indexOf("HỌ") !== -1 && ten.toUpperCase().indexOf("TÊN") !== -1) continue;
         var fullName = (hoVa + " " + ten).replace(/\\s+/g, " ").trim();
         var dob = row[3] instanceof Date ? Utilities.formatDate(row[3], "GMT+7", "dd/MM/yyyy") : String(row[3] || "").trim();
         var studySystem = String(row[11] || "").trim();
@@ -513,14 +515,13 @@ function doPost(e) {
       return roster;
     }
 
-    // Hàm mở rộng và nạp đầy đủ sĩ số lớp vào sheet môn học
+    // Hàm mở rộng và nạp đầy đủ 43 sinh viên vào sheet môn học
     function ensureFullRosterInSheet(targetSheet) {
       var roster = getFullClassRoster();
       if (!roster || roster.length === 0) return;
-      var lastRow = targetSheet.getLastRow();
-      var currentStudentCount = Math.max(0, lastRow - 3);
-      if (currentStudentCount < roster.length) {
-        targetSheet.insertRowsAfter(lastRow, roster.length - currentStudentCount);
+      var neededRows = 3 + roster.length;
+      if (targetSheet.getMaxRows() < neededRows) {
+        targetSheet.insertRowsAfter(targetSheet.getMaxRows(), neededRows - targetSheet.getMaxRows());
       }
       var rowsToWrite = roster.map(function(s, idx) {
         return [idx + 1, s.fullName, s.dateOfBirth || "", s.studySystem || "", s.dateJoinedGroup || ""];
@@ -540,6 +541,10 @@ function doPost(e) {
         sheet = template ? template.copyTo(ss).setName(data.sheetName) : ss.insertSheet(data.sheetName);
         sheetCreated = true;
       }
+      // Đưa sheet vừa tạo lên vị trí hiển thị số 4 (ngay cạnh DANH SÁCH LỚP)
+      ss.setActiveSheet(sheet);
+      try { ss.moveActiveSheet(4); } catch (e) {}
+
       var subjName = data.subjectName || data.sheetName.replace(/^DD\\s+/i, "");
       sheet.getRange(1, 2).setValue(subjName);
       if (data.teacherName) sheet.getRange(1, 4).setValue(data.teacherName);
@@ -562,9 +567,10 @@ function doPost(e) {
       if (!sheet) {
         return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Không tìm thấy sheet " + data.sheetName })).setMimeType(ContentService.MimeType.JSON);
       }
-      if (sheet.getLastRow() - 3 < 30) {
-        ensureFullRosterInSheet(sheet);
-      }
+      // Luôn đảm bảo đủ 43 học viên và đưa sheet lên tab hiển thị nổi bật
+      ss.setActiveSheet(sheet);
+      try { ss.moveActiveSheet(4); } catch (e) {}
+      ensureFullRosterInSheet(sheet);
       var matrix = sheet.getDataRange().getValues();
       var sessionDate = String(data.sessionDate || "").trim();
       var roundNumber = Number(data.roundNumber || 1);

@@ -35,15 +35,24 @@ Nhiệm vụ: Trích xuất CHỈ HỌ VÀ TÊN của từng học viên / sinh 
 QUY TẮC BẮT BUỘC:
 1. CHỈ trích xuất đúng phần HỌ VÀ TÊN người tiếng Việt (Ví dụ: "Phạm Đình Diện", "Phùng Bá Hoan", "Trần Ngọc Bảo", "Trần Thế Anh", "Trịnh Đức Thịnh", "Võ Trọng Tường", "Đào Xuân Quế").
 2. TUYỆT ĐỐI LOẠI BỎ các thành phần gây nhiễu sau:
-   - Chữ viết tắt của ảnh đại diện/avatar ở đầu dòng (như "Po", "Ps", "Mà", "Dạ", "Lại", "BH", "ĐQ", "Ne", "We es", v.v.)
+   - Chữ viết tắt của ảnh đại diện/avatar ở đầu dòng (như "Po", "Ps", "Mà", "Dạ", "Lại", "BH", "ĐQ", "Ne", "We es", "Lê", v.v.)
    - Số thứ tự hoặc ký hiệu đầu dòng (như "1", "(1", "01.", v.v.)
    - Ngày tháng năm sinh (như "31/01/1985", "8/3/1991", "sn11/4/1981", "14.07.1986", v.v.)
    - Mã lớp, khóa học, chuyên ngành (như "CNTT", "K19", "CĐ", "Cnttk", "Cnt Zá", v.v.)
    - Ký tự lạ, dấu ngoặc, mã thiết bị ở cuối dòng (như "(Z4)", "(Zf)", "[A", "[4", "&", "©", "x", v.v.)
    - Các dòng giao diện hoặc chuỗi rác không phải tên người tham gia (như "Participants", "Search", "Mute All", "We es x", v.v.)
-3. Mỗi học viên là 1 dòng riêng biệt. Viết hoa chữ cái đầu mỗi từ và giữ nguyên dấu tiếng Việt chuẩn.
-4. KHÔNG thêm bất kỳ số thứ tự, gạch đầu dòng hay lời giải thích nào.
-5. Nếu ảnh không có danh sách người tham gia, chỉ trả về chữ RONG.`;
+3. Ví dụ bóc tách đúng:
+   - "We Es" -> BỎ HOÀN TOÀN
+   - "Phạm Đình Diện Cnttk" -> "Phạm Đình Diện"
+   - "Phùng Ba Hoan" -> "Phùng Bá Hoan"
+   - "Lê Trần Ngọc Bảo" (Lê là avatar) -> "Trần Ngọc Bảo"
+   - "Trần Thế Anh Cnt Zá" -> "Trần Thế Anh"
+   - "Lại Trịnh Đức Thịnh" (Lại là avatar) -> "Trịnh Đức Thịnh"
+   - "Mà Võ Trọng Tưởng" (Mà là avatar) -> "Võ Trọng Tưởng"
+   - "Dạ Đào Xuân Quế" (Dạ là avatar) -> "Đào Xuân Quế"
+4. Mỗi học viên là 1 dòng riêng biệt. Viết hoa chữ cái đầu mỗi từ và giữ nguyên dấu tiếng Việt chuẩn.
+5. KHÔNG thêm bất kỳ số thứ tự, gạch đầu dòng hay lời giải thích nào.
+6. Nếu ảnh không có danh sách người tham gia, chỉ trả về chữ RONG.`;
 
     const body = {
       contents: [
@@ -65,13 +74,14 @@ QUY TẮC BẮT BUỘC:
       },
     };
 
-    // Modern Gemini models supported by Google AI Studio
+    // Modern Gemini models supported by Google AI Studio (prioritizing high-availability flash-lite)
     const models = [
-      "gemini-flash-latest",
       "gemini-3.5-flash-lite",
+      "gemini-flash-lite-latest",
       "gemini-3.8-flash",
       "gemini-3.5-flash",
       "gemini-3.7-flash",
+      "gemini-flash-latest",
     ];
     let lastError: any = null;
 

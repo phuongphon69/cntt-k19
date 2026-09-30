@@ -178,3 +178,8 @@ export function isSubjectSheetCreated(sheetName: string): boolean {
   return state.createdSheets.includes(sheetKey);
 }
 
+export function getCreatedSheets(): string[] {
+  const state = ensureStoreFile();
+  return state.createdSheets || [];
+}
+

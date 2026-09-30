@@ -17,6 +17,7 @@ import {
   getCustomSubjects,
   getRecordedAttendanceRounds,
   isSubjectSheetCreated,
+  getCreatedSheets,
 } from "./sync-store";
 import { parseVNDate } from "@/lib/utils";
 import { DEFAULT_ATTENDANCE_CONFIG } from "@/lib/attendance/calculator";
@@ -116,17 +117,56 @@ export async function getWorkbookSheetNames(): Promise<string[]> {
     }
   }
 
-  // Fallback known default sheets
-  const defaultSheets = [
-    "TKB",
-    "CNTT - K19",
-    "DD CHÍNH TRỊ",
-    "DD TIN HỌC",
-    "DD TIẾNG ANH",
-    "DD GDTC",
-    "MẪU MÔN HỌC",
-    "TỔNG HỢP",
-  ];
+  // Fallback 1: Dynamically scrape real sheet tabs from Google Sheet HTML (production/runtime)
+  if (process.env.NODE_ENV !== "test") {
+    try {
+      const editUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+      const res = await fetch(editUrl, {
+        signal: AbortSignal.timeout(3000),
+        next: { revalidate: 60 },
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const regex = /docs-sheet-tab-caption">([^<]+)<\/div>/g;
+        const scraped: string[] = [];
+        let match;
+        while ((match = regex.exec(html)) !== null) {
+          if (match[1] && !scraped.includes(match[1])) {
+            scraped.push(match[1]);
+          }
+        }
+        if (scraped.length > 0) {
+          // Also ensure default sheets and custom subjects are included
+          const customNames = getCustomSubjects().map((s) => s.sheetName || `DD ${s.name.toUpperCase()}`);
+          const createdNames = getCreatedSheets();
+          const merged = Array.from(new Set([...scraped, ...customNames, ...createdNames]));
+          setCached(cacheKey, merged);
+          return merged;
+        }
+      }
+    } catch (scrapeErr) {
+      console.warn("Failed to scrape sheet names from HTML:", scrapeErr);
+    }
+  }
+
+  // Fallback 2: Known default sheets + custom subjects
+  const customNames = getCustomSubjects().map((s) => s.sheetName || `DD ${s.name.toUpperCase()}`);
+  const createdNames = getCreatedSheets();
+  const defaultSheets = Array.from(
+    new Set([
+      "TKB",
+      "CNTT - K19",
+      "DD CHÍNH TRỊ",
+      "DD TIN HỌC",
+      "DD TIẾNG ANH",
+      "DD GDTC",
+      "MẪU MÔN HỌC",
+      "TỔNG HỢP",
+      ...customNames,
+      ...createdNames,
+    ])
+  );
   setCached(cacheKey, defaultSheets);
   return defaultSheets;
 }
@@ -567,7 +607,16 @@ export async function getAttendanceSheetData(sheetName: string): Promise<ParsedA
     (s) => s.trim().toUpperCase() === sheetName.trim().toUpperCase()
   );
 
-  const matrix = sheetExists ? await fetchSheetMatrix(sheetName) : [];
+  let matrix = sheetExists ? await fetchSheetMatrix(sheetName) : [];
+  if (matrix.length === 0) {
+    const directMatrix = await fetchSheetMatrix(sheetName);
+    const isTkbDefault =
+      directMatrix.length > 0 &&
+      String(directMatrix[0]?.[0] || "").toUpperCase().includes("THỜI KHÓA BIỂU");
+    if (!isTkbDefault && directMatrix.length >= 3) {
+      matrix = directMatrix;
+    }
+  }
   let parsed = parseAttendanceSheet(sheetName, matrix, tkbDates.length > 0 ? tkbDates : undefined);
 
   // If sheet doesn't exist on Google Sheets yet (e.g. newly discovered from TKB),
@@ -619,6 +668,32 @@ export async function getAttendanceSheetData(sheetName: string): Promise<ParsedA
 
   const classStudents = await getStudents();
   parsed.totalClassStudents = classStudents.length;
+
+  // Ensure all students from master class roster are included in parsed records
+  for (const cs of classStudents) {
+    const exists = parsed.records.some(
+      (r) =>
+        r.studentId === cs.id ||
+        normalizeVietnameseNameWithoutAccent(r.studentName).replace(/\s+/g, "_") === cs.id
+    );
+    if (!exists) {
+      parsed.records.push({
+        studentId: cs.id,
+        studentName: cs.fullName,
+        dateOfBirth: cs.dateOfBirth,
+        studySystem: cs.studySystem,
+        dateJoinedGroup: cs.dateJoinedGroup,
+        isApplicable: true,
+        sessions: {},
+        totalX: 0,
+        totalP: 0,
+        totalM: 0,
+        attendanceRate: 100,
+        recordedSessions: 0,
+        warning: false,
+      });
+    }
+  }
   parsed.enrolledStudentsCount = parsed.records.length;
 
   // 5. Overlay any confirmed attendance rounds from persistent sync-store
