@@ -2,11 +2,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth/session";
 import { getPublicStudents, getAttendanceSheetData, getZoomAliases, getSystemSettings } from "@/lib/google-sheets/reader";
-import { getOcrProvider } from "@/lib/ocr/provider";
+import { getOcrProvider, hasConfiguredOcrApi } from "@/lib/ocr/provider";
 import { processMultipleOcrOutputs } from "@/lib/ocr/matcher";
 import { AttendanceValue } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    await requireAdminSession();
+    const hasServerKey = hasConfiguredOcrApi();
+    return NextResponse.json({
+      success: true,
+      hasServerKey,
+      serverProvider: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+        ? "Gemini AI Vision"
+        : process.env.GOOGLE_CLOUD_VISION_API_KEY
+        ? "Google Cloud Vision"
+        : null,
+    });
+  } catch (err: any) {
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json({ success: false, error: "Quyền truy cập bị từ chối" }, { status: 403 });
+    }
+    return NextResponse.json({ success: false, hasServerKey: false });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +38,7 @@ export async function POST(req: NextRequest) {
     const sessionDate = formData.get("sessionDate") as string;
     const roundNumber = parseInt((formData.get("roundNumber") as string) || "1", 10);
     const rawOcrText = formData.get("rawOcrText") as string;
+    const clientApiKey = formData.get("geminiApiKey") as string;
 
     const files = formData.getAll("images") as File[];
 
@@ -27,25 +49,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ocrProvider = getOcrProvider();
+    const ocrProvider = getOcrProvider(clientApiKey);
     const ocrTexts: string[] = [];
+    let lastOcrError = "";
 
-    // If user provided raw text directly
+    // If user provided raw text directly or from client-side OCR
     if (rawOcrText && rawOcrText.trim()) {
       ocrTexts.push(rawOcrText.trim());
     }
 
-    // Process uploaded images
+    // Process uploaded images (if any)
     for (const file of files) {
       if (file && file.size > 0) {
         try {
           const arrayBuffer = await file.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
-          const ocrRes = await ocrProvider.recognize(buffer, file.type);
+          const ocrRes = await ocrProvider.recognize(buffer, file.type || "image/jpeg");
           if (ocrRes.fullText) {
             ocrTexts.push(ocrRes.fullText);
           }
         } catch (imgErr: any) {
+          lastOcrError = imgErr?.message || "Lỗi xử lý ảnh";
           // If NO_OCR_API error (no image processing configured), propagate clearly
           if (imgErr.message?.startsWith("NO_OCR_API")) {
             return NextResponse.json(
@@ -58,7 +82,6 @@ export async function POST(req: NextRequest) {
             );
           }
           console.error(`OCR failed for file ${file.name}:`, imgErr?.message || imgErr);
-          // Continue processing other images if one fails
         }
       }
     }
@@ -68,7 +91,9 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error:
-            "Không thể nhận diện văn bản từ ảnh. Vui lòng: (1) cấu hình GEMINI_API_KEY, hoặc (2) dán trực tiếp danh sách tên vào ô văn bản bên dưới.",
+            lastOcrError ||
+            "Không thể nhận diện văn bản từ ảnh. Bạn có thể cài đặt Gemini API Key hoặc chuyển sang chế độ quét trực tiếp bằng trình duyệt.",
+          noApiConfigured: !clientApiKey && !hasConfiguredOcrApi(),
         },
         { status: 400 }
       );
@@ -76,7 +101,7 @@ export async function POST(req: NextRequest) {
 
     if (ocrTexts.length === 0) {
       return NextResponse.json(
-        { success: false, error: "Không tìm thấy nội dung văn bản trong ảnh tải lên" },
+        { success: false, error: "Không tìm thấy nội dung văn bản nào để đối chiếu danh sách" },
         { status: 400 }
       );
     }
