@@ -108,7 +108,7 @@ export function parseZoomOcrText(ocrText: string): ParsedZoomName[] {
     const trimmed = line.trim();
     if (!trimmed || trimmed.length < 2) continue;
 
-    // Filter out common Zoom UI header/footer lines
+    // Filter out common Zoom UI header/footer lines and non-name phrases
     const lower = trimmed.toLowerCase();
     if (
       lower.includes("participants") ||
@@ -119,7 +119,12 @@ export function parseZoomOcrText(ocrText: string): ParsedZoomName[] {
       lower.includes("search") ||
       lower.includes("tìm kiếm") ||
       lower.includes("waiting room") ||
-      lower.includes("phòng chờ")
+      lower.includes("phòng chờ") ||
+      lower.includes("ảnh chụp") ||
+      lower.includes("ảnh được cung cấp") ||
+      lower.includes("giao diện trang web") ||
+      lower.includes("vui lòng tải lên") ||
+      lower.includes("không tìm thấy")
     ) {
       continue;
     }
