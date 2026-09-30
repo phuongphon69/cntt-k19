@@ -106,7 +106,6 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
   const [rawText, setRawText] = useState("");
   const [loading, setLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
-  const [noApiConfigured, setNoApiConfigured] = useState(false);
   const [ocrSummary, setOcrSummary] = useState<OcrResultSummary | null>(null);
   const [candidates, setCandidates] = useState<OcrCandidate[]>([]);
   const [showUnmatchedModal, setShowUnmatchedModal] = useState(false);
@@ -114,8 +113,8 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  // ─── OCR Mode & API Key State ─────────────────────────────────────────────
-  const [ocrMode, setOcrMode] = useState<"gemini" | "browser">("gemini");
+  // ─── OCR Mode & API Key State (Default: browser mode so it works immediately without API) ───
+  const [ocrMode, setOcrMode] = useState<"browser" | "gemini">("browser");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [serverHasKey, setServerHasKey] = useState(false);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
@@ -132,6 +131,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
       if (savedKey) {
         setGeminiApiKey(savedKey);
         setKeyInput(savedKey);
+        setOcrMode("gemini");
       }
     } catch (e) {}
 
@@ -140,6 +140,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
       .then((data) => {
         if (data.hasServerKey) {
           setServerHasKey(true);
+          setOcrMode("gemini");
         }
       })
       .catch(() => {});
@@ -174,7 +175,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         localStorage.setItem("cntt_gemini_api_key", clean);
       } catch (e) {}
       setGeminiApiKey(clean);
-      setNoApiConfigured(false);
+      setOcrMode("gemini");
       setOcrError(null);
       setShowApiKeyModal(false);
       setKeyTestResult(null);
@@ -183,6 +184,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         localStorage.removeItem("cntt_gemini_api_key");
       } catch (e) {}
       setGeminiApiKey("");
+      setOcrMode("browser");
       setKeyTestResult(null);
     }
   };
@@ -193,6 +195,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
     } catch (e) {}
     setGeminiApiKey("");
     setKeyInput("");
+    setOcrMode("browser");
     setKeyTestResult(null);
   };
 
@@ -202,6 +205,48 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
     }
   };
 
+  // ─── Browser OCR Runner (100% Free, Runs via WebAssembly in browser) ─────
+  const runBrowserOcrAndMatch = async (inputFiles: File[], extraText: string) => {
+    setProgressInfo({ progress: 5, statusText: "Đang tối ưu ảnh và tăng độ tương phản chữ..." });
+    const optimizedFiles = await Promise.all(
+      inputFiles.map((f) => optimizeImageForOcr(f, { invertIfDark: true }))
+    );
+
+    const ocrTexts = await recognizeImagesWithClientTesseract(optimizedFiles, (p) => {
+      setProgressInfo(p);
+    });
+
+    if (ocrTexts.length === 0 && !extraText.trim()) {
+      setOcrError("Không trích xuất được chữ nào từ ảnh. Bạn vui lòng chụp ảnh Zoom rõ hơn hoặc dán tên vào ô văn bản.");
+      return;
+    }
+
+    setProgressInfo({ progress: 95, statusText: "Đang đối chiếu danh sách lớp CNTT K19..." });
+
+    const formData = new FormData();
+    formData.append("sheetName", selectedSubjectSheet);
+    formData.append("sessionDate", sessionDate);
+    formData.append("roundNumber", String(roundNumber));
+    const allOcr = [...ocrTexts];
+    if (extraText.trim()) allOcr.push(extraText.trim());
+    formData.append("rawOcrText", allOcr.join("\n"));
+
+    const res = await fetch("/api/admin/attendance/ocr", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      setOcrSummary(data.summary);
+      setCandidates(data.summary.candidates || []);
+      setOcrError(null);
+    } else {
+      setOcrError(data.error || "Lỗi xử lý kết quả đối chiếu danh sách");
+    }
+  };
+
+  // ─── Main OCR Dispatcher (Auto-selects best available engine) ─────────────
   const handleProcessOcr = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSubjectSheet || !sessionDate) {
@@ -217,32 +262,34 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
     setLoading(true);
     setSuccessMessage("");
     setOcrError(null);
-    setNoApiConfigured(false);
 
     try {
-      // ─── CHẾ ĐỘ 1: QUÉT TRỰC TIẾP TRONG TRÌNH DUYỆT (TESSERACT.JS) ───────
-      if (ocrMode === "browser" && files.length > 0) {
-        setProgressInfo({ progress: 5, statusText: "Đang tối ưu dung lượng ảnh..." });
-        const optimizedFiles = await Promise.all(files.map((f) => optimizeImageForOcr(f)));
+      const hasAnyKey = Boolean(geminiApiKey || serverHasKey);
 
-        const ocrTexts = await recognizeImagesWithClientTesseract(optimizedFiles, (p) => {
-          setProgressInfo(p);
-        });
+      // If user selected browser mode, OR if no API key is set anywhere:
+      // AUTOMATICALLY run browser OCR directly without throwing any errors!
+      if (ocrMode === "browser" || !hasAnyKey) {
+        await runBrowserOcrAndMatch(files, rawText);
+        return;
+      }
 
-        if (ocrTexts.length === 0 && !rawText.trim()) {
-          setOcrError("Không trích xuất được chữ nào từ ảnh. Hãy thử chụp ảnh rõ nét hơn hoặc dùng Gemini AI Vision.");
-          return;
+      // If user has a Gemini key, try Gemini Vision first
+      try {
+        let filesToSend = files;
+        if (files.length > 0) {
+          setProgressInfo({ progress: 15, statusText: "Đang nén và tối ưu dung lượng ảnh..." });
+          filesToSend = await Promise.all(files.map((f) => optimizeImageForOcr(f)));
         }
 
-        setProgressInfo({ progress: 95, statusText: "Đang đối chiếu danh sách sinh viên..." });
+        setProgressInfo({ progress: 40, statusText: "Đang gửi ảnh đến Google Gemini AI Vision..." });
 
         const formData = new FormData();
         formData.append("sheetName", selectedSubjectSheet);
         formData.append("sessionDate", sessionDate);
         formData.append("roundNumber", String(roundNumber));
-        const allOcr = [...ocrTexts];
-        if (rawText.trim()) allOcr.push(rawText.trim());
-        formData.append("rawOcrText", allOcr.join("\n"));
+        if (rawText.trim()) formData.append("rawOcrText", rawText);
+        if (geminiApiKey) formData.append("geminiApiKey", geminiApiKey);
+        filesToSend.forEach((f) => formData.append("images", f));
 
         const res = await fetch("/api/admin/attendance/ocr", {
           method: "POST",
@@ -253,48 +300,32 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         if (data.success) {
           setOcrSummary(data.summary);
           setCandidates(data.summary.candidates || []);
-        } else {
-          setOcrError(data.error || "Lỗi xử lý kết quả đối chiếu");
+          return;
         }
-        return;
-      }
 
-      // ─── CHẾ ĐỘ 2: GOOGLE GEMINI VISION AI ──────────────────────────────
-      // Tự động tối ưu dung lượng ảnh (Canvas resize) để tránh chạm trần Vercel 4.5MB
-      let filesToSend = files;
-      if (files.length > 0) {
-        setProgressInfo({ progress: 15, statusText: "Đang nén và tối ưu dung lượng ảnh..." });
-        filesToSend = await Promise.all(files.map((f) => optimizeImageForOcr(f)));
-      }
+        // If Gemini failed (key invalid, rate limit, timeout):
+        // AUTOMATICALLY fallback to browser OCR immediately!
+        console.warn("Gemini call failed, auto-falling back to browser OCR:", data.error);
+        if (files.length > 0) {
+          setProgressInfo({
+            progress: 20,
+            statusText: "Đang tự động chuyển sang bộ quét tích hợp trên máy...",
+          });
+          await runBrowserOcrAndMatch(files, rawText);
+          return;
+        }
 
-      setProgressInfo({ progress: 40, statusText: "Đang gửi ảnh đến Google Gemini AI Vision..." });
-
-      const formData = new FormData();
-      formData.append("sheetName", selectedSubjectSheet);
-      formData.append("sessionDate", sessionDate);
-      formData.append("roundNumber", String(roundNumber));
-      if (rawText.trim()) formData.append("rawOcrText", rawText);
-      if (geminiApiKey) formData.append("geminiApiKey", geminiApiKey);
-
-      filesToSend.forEach((f) => formData.append("images", f));
-
-      const res = await fetch("/api/admin/attendance/ocr", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setOcrSummary(data.summary);
-        setCandidates(data.summary.candidates || []);
-      } else {
         setOcrError(data.error || "Lỗi xử lý OCR");
-        if (data.noApiConfigured) {
-          setNoApiConfigured(true);
+      } catch (geminiErr: any) {
+        console.warn("Gemini threw error, auto-falling back to browser OCR:", geminiErr);
+        if (files.length > 0) {
+          await runBrowserOcrAndMatch(files, rawText);
+          return;
         }
+        setOcrError("Lỗi kết nối máy chủ. Vui lòng thử lại.");
       }
     } catch (err: any) {
-      setOcrError("Lỗi kết nối máy chủ hoặc quá thời gian chờ. Vui lòng thử lại.");
+      setOcrError("Lỗi xử lý quét ảnh: " + (err?.message || err));
     } finally {
       setLoading(false);
       setProgressInfo(null);
@@ -384,7 +415,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
             <span>Điểm danh bằng ảnh chụp Zoom OCR</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Hỗ trợ tải lên nhiều ảnh chụp danh sách người tham gia Zoom, tự động tách tên tiếng Việt, loại bỏ K19/CNTT và đối chiếu danh sách lớp.
+            Tải lên ảnh chụp danh sách người tham gia Zoom, tự động nhận diện tên tiếng Việt và đối chiếu danh sách lớp.
           </p>
         </div>
 
@@ -398,13 +429,14 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
               setShowApiKeyModal(true);
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-xs transition-all cursor-pointer"
+            title="Cài đặt Google Gemini API Key để tăng độ chính xác tiếng Việt"
           >
             <Key className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Cài đặt API Key</span>
+            <span>{serverHasKey || geminiApiKey ? "AI Key: Đã bật" : "Cài đặt Gemini AI"}</span>
             {serverHasKey || geminiApiKey ? (
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             ) : (
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
             )}
           </button>
 
@@ -601,103 +633,34 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
               </div>
             )}
 
-            {/* ─── OCR Engine Selector & API Status ─────────────────────── */}
-            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-indigo-500" />
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Phương thức nhận diện hình ảnh:
-                  </span>
+            {/* OCR Engine Info Strip */}
+            <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100/80 dark:border-indigo-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-600 text-white">
+                  <Zap className="w-3.5 h-3.5" />
                 </div>
-
-                {/* API status badge & Setting button */}
-                <div className="flex items-center gap-2">
-                  {ocrMode === "gemini" ? (
-                    serverHasKey ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Server Key: Sẵn sàng
-                      </span>
-                    ) : geminiApiKey ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        Key cá nhân: Đã lưu ({geminiApiKey.slice(0, 4)}...{geminiApiKey.slice(-4)})
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
-                        <AlertTriangle className="w-3 h-3 text-amber-500" />
-                        Chưa có API Key
-                      </span>
-                    )
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
-                      <Zap className="w-3 h-3 text-blue-500" />
-                      100% Miễn phí • Không cần API
-                    </span>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setKeyInput(geminiApiKey);
-                      setKeyTestResult(null);
-                      setShowApiKeyModal(true);
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 transition-all cursor-pointer shadow-xs"
-                  >
-                    <Key className="w-3 h-3 text-indigo-500" />
-                    <span>Cài đặt Key</span>
-                  </button>
+                <div className="text-xs">
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {serverHasKey || geminiApiKey
+                      ? "Đang dùng: Google Gemini AI Vision (Nhận diện tiếng Việt 99%)"
+                      : "Đang dùng: Bộ quét trực tiếp tích hợp (Miễn phí 100%, không cần API)"}
+                  </span>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Tự động nhận diện danh sách học viên, lọc icon Zoom và đối chiếu danh sách lớp.
+                  </p>
                 </div>
               </div>
 
-              {/* Mode Pills */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setOcrMode("gemini")}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
-                    ocrMode === "gemini"
-                      ? "bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-xs"
-                      : "bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700/80 opacity-70 hover:opacity-100"
-                  }`}
+                  onClick={() => {
+                    setKeyInput(geminiApiKey);
+                    setShowApiKeyModal(true);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100/80 dark:bg-indigo-900/60 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-all cursor-pointer"
                 >
-                  <div className={`p-2 rounded-xl shrink-0 ${ocrMode === "gemini" ? "bg-indigo-600 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-500"}`}>
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Google Gemini AI Vision</span>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">Khuyên dùng</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                      Độ chính xác 99.9%, tự nhận diện tên tiếng Việt có dấu, tách ngày sinh, lọc icon Zoom. Cực nhanh 2 giây.
-                    </p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setOcrMode("browser")}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
-                    ocrMode === "browser"
-                      ? "bg-blue-50/90 dark:bg-blue-950/50 border-blue-300 dark:border-blue-700 shadow-xs"
-                      : "bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700/80 opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <div className={`p-2 rounded-xl shrink-0 ${ocrMode === "browser" ? "bg-blue-600 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-500"}`}>
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Quét trong trình duyệt</span>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">Không cần API</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                      Chạy trực tiếp trên máy bằng WebAssembly (Tesseract). 100% miễn phí, không cần đăng ký tài khoản gì.
-                    </p>
-                  </div>
+                  {serverHasKey || geminiApiKey ? "Quản lý API Key" : "Thêm Gemini Key (Tùy chọn)"}
                 </button>
               </div>
             </div>
@@ -723,10 +686,10 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
                       className="hidden"
                     />
                   </label>
-                  <div className="text-xs text-slate-400 mt-2">
+                  <div className="text-xs text-slate-400 mt-2 font-medium">
                     {files.length > 0
                       ? `Đã chọn ${files.length} ảnh: ${files.map((f) => f.name).join(", ")}`
-                      : "Hỗ trợ chọn nhiều ảnh cùng lúc trên iPhone/Android/PC"}
+                      : "Hỗ trợ ảnh chụp màn hình máy tính hoặc điện thoại"}
                   </div>
                 </div>
               </div>
@@ -747,79 +710,38 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
             </div>
 
             {/* Real-time Progress Bar */}
-            {loading && progressInfo && (
-              <div className="p-4 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 space-y-2">
+            {loading && (
+              <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200">
                   <div className="flex items-center gap-2">
                     <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
-                    <span>{progressInfo.statusText}</span>
+                    <span>{progressInfo?.statusText || "Đang xử lý ảnh & đối chiếu danh sách..."}</span>
                   </div>
-                  <span>{progressInfo.progress}%</span>
+                  <span>{progressInfo?.progress || 15}%</span>
                 </div>
                 <div className="w-full h-2 bg-indigo-100 dark:bg-indigo-900/60 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-indigo-600 transition-all duration-300 rounded-full"
-                    style={{ width: `${Math.max(5, progressInfo.progress)}%` }}
+                    style={{ width: `${Math.max(10, progressInfo?.progress || 15)}%` }}
                   />
                 </div>
               </div>
             )}
 
-            {/* OCR Error Banner with One-Click Actions */}
+            {/* OCR Error Banner */}
             {ocrError && (
-              <div
-                className={`p-4 rounded-2xl border text-sm space-y-3 ${
-                  noApiConfigured
-                    ? "bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
-                    : "bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-800 text-red-900 dark:text-red-200"
-                }`}
-              >
+              <div className="p-4 rounded-2xl border text-sm space-y-2 bg-rose-50 dark:bg-rose-950/50 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                  <div className="space-y-2 flex-1">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                  <div className="space-y-1 flex-1">
                     <p className="font-semibold">{ocrError}</p>
-
-                    {noApiConfigured && (
-                      <div className="space-y-3 pt-1">
-                        <p className="text-xs text-amber-800 dark:text-amber-300 font-medium">
-                          Bạn có thể chọn 1 trong 2 cách xử lý ngay lập tức bên dưới:
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setKeyInput(geminiApiKey);
-                              setShowApiKeyModal(true);
-                            }}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-xs flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Key className="w-3.5 h-3.5" />
-                            <span>1. Nhập Gemini API Key miễn phí (Khuyên dùng)</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOcrMode("browser");
-                              setOcrError(null);
-                              setNoApiConfigured(false);
-                            }}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 shadow-xs flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Zap className="w-3.5 h-3.5 text-amber-500" />
-                            <span>2. Quét bằng Trình duyệt (Không cần API)</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <p className="text-xs text-rose-700 dark:text-rose-300">
+                      Gợi ý: Hãy chụp ảnh Zoom rõ hơn hoặc dán trực tiếp tên vào ô văn bản phía trên.
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setOcrError(null);
-                      setNoApiConfigured(false);
-                    }}
+                    onClick={() => setOcrError(null)}
                     className="text-xs opacity-60 hover:opacity-100 shrink-0"
                   >
                     <X className="w-4 h-4" />
@@ -838,17 +760,13 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
                   <span>
-                    {progressInfo?.statusText || "Đang xử lý OCR & Đối chiếu danh sách..."}
+                    {progressInfo?.statusText || "Đang quét ảnh & đối chiếu danh sách..."}
                   </span>
                 </>
               ) : (
                 <>
                   <Camera className="w-4 h-4" />
-                  <span>
-                    {ocrMode === "browser"
-                      ? "BẮT ĐẦU QUÉT BẰNG TRÌNH DUYỆT (OFFLINE)"
-                      : "BẮT ĐẦU NHẬN DIỆN GEMINI AI VISION"}
-                  </span>
+                  <span>BẮT ĐẦU QUÉT & ĐỐI CHIẾU DANH SÁCH</span>
                 </>
               )}
             </button>
@@ -871,7 +789,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
                 </span>
               </div>
               <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                Kết quả đối chiếu người tham gia Zoom ({ocrSummary.totalExtracted} tên)
+                Kết quả đối chiếu người tham gia Zoom ({ocrSummary.totalExtracted} người)
               </h2>
             </div>
 
@@ -1052,7 +970,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         </div>
       )}
 
-      {/* ─── API Key Configuration Modal ─────────────────────────────────── */}
+      {/* ─── API Key Configuration Modal (Optional) ──────────────────────── */}
       {showApiKeyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-6 space-y-5 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
@@ -1063,9 +981,9 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Cài đặt Google Gemini API Key
+                    Google Gemini API Key (Tùy chọn)
                   </h3>
-                  <p className="text-xs text-slate-500">Miễn phí 100%, không cần thẻ tín dụng</p>
+                  <p className="text-xs text-slate-500">Dùng để tăng tốc và nhận diện tiếng Việt chính xác 99%</p>
                 </div>
               </div>
               <button
@@ -1077,22 +995,10 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
               </button>
             </div>
 
-            {/* Server key notice */}
-            {serverHasKey ? (
-              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 flex items-center gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>
-                  Máy chủ đã được cấu hình sẵn <strong>GEMINI_API_KEY</strong> trong biến môi trường. Bạn không bắt buộc phải nhập key ở đây.
-                </span>
-              </div>
-            ) : (
-              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>
-                  Máy chủ chưa có API Key. Hãy dán mã API key cá nhân của bạn vào ô dưới đây (được lưu an toàn trong trình duyệt của bạn).
-                </span>
-              </div>
-            )}
+            {/* Notice */}
+            <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-xs text-indigo-900 dark:text-indigo-200">
+              💡 <strong>Lưu ý:</strong> Bạn <strong>không bắt buộc</strong> phải có API Key. Hệ thống đã tích hợp sẵn bộ quét trực tiếp trong trình duyệt để bạn điểm danh ngay mà không cần làm gì thêm!
+            </div>
 
             {/* API Key Input */}
             <div className="space-y-2">
@@ -1139,9 +1045,9 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
             )}
 
             {/* Step-by-step 30s guide */}
-            <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 space-y-2 text-xs text-indigo-950 dark:text-indigo-200">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2 text-xs text-slate-700 dark:text-slate-300">
               <div className="font-bold flex items-center justify-between">
-                <span>📖 Cách lấy mã API Key miễn phí (30 giây):</span>
+                <span>Cách lấy key miễn phí từ Google:</span>
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank"
@@ -1152,20 +1058,10 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
-              <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px] text-slate-600 dark:text-slate-300">
-                <li>
-                  Truy cập trang{" "}
-                  <a
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-bold text-indigo-600 dark:text-indigo-400 underline"
-                  >
-                    aistudio.google.com/app/apikey
-                  </a>
-                </li>
-                <li>Đăng nhập tài khoản Gmail của bạn và bấm <strong>&quot;Create API key&quot;</strong>.</li>
-                <li>Sao chép mã hiển thị và dán vào ô bên trên rồi bấm <strong>Lưu Key</strong>.</li>
+              <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <li>Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline font-bold text-indigo-500">aistudio.google.com/app/apikey</a></li>
+                <li>Bấm nút <strong>&quot;+ Create API key&quot;</strong> ở góc trên bên phải.</li>
+                <li>Sao chép mã <code>AIzaSy...</code> và dán vào ô trên rồi bấm <strong>Lưu Key</strong>.</li>
               </ol>
             </div>
 
