@@ -311,5 +311,30 @@ describe("Attendance Calculator Rules", () => {
     );
     expect(deleteSessionRes.success).toBe(true);
   }, 15000);
+
+  it("correctly parses attendance sheet even when explicit header labels are absent", async () => {
+    const { parseAttendanceSheet } = await import("../lib/attendance/parser");
+    // Matrix like the newly created DD CẤU TRÚC DỮ LIỆU sheet
+    const rawMatrix = [
+      ["", "Cấu trúc dữ liệu và giải thuật", "", "Thầy Phan", "", 2],
+      [1, "Trương Văn Trung", "16/06/1993", "CQ", "", "X"],
+      [2, "Nguyễn Văn Chung", "08/07/1992", "CQ", "22/04/2026", "X"],
+      [3, "Nguyễn Huy Phương", "10/08/1997", "LT", "11/05/2026", ""],
+      [4, "Nguyễn Quang Tuấn", "23/02/1989", "CQ", "11/05/2026", "X"],
+    ];
+
+    const tkbDates = ["29/09/2026", "03/10/2026"];
+    const parsed = parseAttendanceSheet("DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT", rawMatrix, tkbDates);
+
+    expect(parsed.sessions.length).toBe(2);
+    expect(parsed.sessions[0].date).toBe("29/09/2026");
+    expect(parsed.sessions[1].date).toBe("03/10/2026");
+    expect(parsed.records.length).toBe(4);
+    expect(parsed.records[0].studentName).toBe("Trương Văn Trung");
+    expect(parsed.records[0].sessions["29/09/2026"]?.round1).toBe("X");
+    expect(parsed.records[1].studentName).toBe("Nguyễn Văn Chung");
+    expect(parsed.records[1].sessions["29/09/2026"]?.round1).toBe("X");
+  });
 });
+
 

@@ -164,9 +164,17 @@ export async function writeAttendanceRound(
             dateJoinedGroup: s.dateJoinedGroup || "",
           })),
         }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(60000),
       });
-      const resData = await resp.json().catch(() => ({}));
+      const text = await resp.text();
+      let resData: any = {};
+      try {
+        const jsonMatch = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
+        if (jsonMatch) resData = JSON.parse(jsonMatch);
+      } catch (e) {
+        try { resData = JSON.parse(text); } catch (e2) {}
+      }
+
       if (resData.sheetCreated) {
         sheetCreated = true;
       }
@@ -317,7 +325,7 @@ export async function updateStudentAttendanceRounds(
           round2: rounds.round2,
           round3: rounds.round3,
         }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(60000),
       });
     } catch (err) {
       console.warn(`[AppsScript editAttendance error]:`, err);
@@ -422,7 +430,7 @@ export async function clearSessionAttendance(
           studentId: mode === "student" ? studentId : undefined,
           mode,
         }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(60000),
       });
     } catch (err) {
       console.warn(`[AppsScript deleteAttendance error]:`, err);
@@ -574,7 +582,7 @@ export async function createNewSubjectSheet(
             dateJoinedGroup: s.dateJoinedGroup || "",
           })),
         }),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(60000),
       });
     } catch (err) {
       console.warn("[AppsScript Webhook createSheet error]:", err);

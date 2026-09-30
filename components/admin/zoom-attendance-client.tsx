@@ -387,6 +387,16 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
     );
   };
 
+  const toggleSelectAll = () => {
+    const hasAnyUnselected = candidates.some((c) => c.matchedStudent && !c.confirmed);
+    setCandidates((prev) =>
+      prev.map((c) => ({
+        ...c,
+        confirmed: c.matchedStudent ? hasAnyUnselected : false,
+      }))
+    );
+  };
+
   const changeCandidateStudent = (idx: number, studentId: string) => {
     const stu = students.find((s) => s.id === studentId);
     setCandidates((prev) => {
@@ -914,9 +924,20 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
 
           {/* Candidates Matching Review Table */}
           <div className="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500 flex items-center justify-between">
-              <span>DANH SÁCH ĐỐI CHIẾU HỌC VIÊN TỪ ẢNH ZOOM</span>
-              <span>Đang chọn {confirmedCandidates.length} / {candidates.length} người có mặt</span>
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <span>DANH SÁCH ĐỐI CHIẾU HỌC VIÊN TỪ ẢNH ZOOM</span>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60 transition-colors cursor-pointer"
+                >
+                  {candidates.some((c) => c.matchedStudent && !c.confirmed) ? "✓ Chọn tất cả" : "✕ Bỏ chọn tất cả"}
+                </button>
+              </div>
+              <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                Đang chọn {confirmedCandidates.length} / {candidates.length} người có mặt
+              </span>
             </div>
 
             <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[600px] overflow-y-auto">

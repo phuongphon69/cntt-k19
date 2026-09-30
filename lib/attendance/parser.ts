@@ -57,7 +57,26 @@ export function parseAttendanceSheet(
       break;
     }
   }
-  if (headerRowIdx === -1) headerRowIdx = Math.min(2, rawMatrix.length - 1);
+
+  let studentStartRow = headerRowIdx !== -1 ? headerRowIdx + 2 : -1;
+
+  if (headerRowIdx === -1) {
+    // If no explicit header row was found, check where student rows start!
+    for (let r = 0; r < Math.min(5, rawMatrix.length); r++) {
+      const row = rawMatrix[r] || [];
+      const stt = parseInt(String(row[0] || ""), 10);
+      const name = String(row[1] || "").trim();
+      if ((stt === 1 || stt === 2) && name.length >= 3 && !name.toUpperCase().includes("MÔN")) {
+        studentStartRow = r;
+        headerRowIdx = Math.max(0, r - 1);
+        break;
+      }
+    }
+    if (studentStartRow === -1) {
+      studentStartRow = Math.min(2, rawMatrix.length - 1);
+      headerRowIdx = Math.max(0, studentStartRow - 2);
+    }
+  }
 
   // 2. Discover Subject Name, Teacher Name, Total Sessions from metadata rows
   let subjectName = "";
@@ -176,12 +195,27 @@ export function parseAttendanceSheet(
     colIdx += 4; // Move to next 4-column group (LẦN 1, LẦN 2, LẦN 3, %)
   }
 
+  // Ensure all scheduled dates from TKB are present in sessionList
+  if (tkbDates && tkbDates.length > 0) {
+    for (let i = 0; i < tkbDates.length; i++) {
+      const targetDate = tkbDates[i];
+      const existing = sessionList.find((s) => s.date === targetDate);
+      if (!existing) {
+        sessionList.push({
+          index: i + 1,
+          date: targetDate,
+          colStart: 5 + i * 4,
+        });
+      }
+    }
+    sessionList.sort((a, b) => a.index - b.index);
+  }
+
   if (totalSessions === 0 || totalSessions < sessionList.length) {
     totalSessions = sessionList.length;
   }
 
-  // 4. Read Student Rows (starting after the label row)
-  const studentStartRow = headerRowIdx + 2;
+  // 4. Read Student Rows (starting from studentStartRow)
   const records: StudentAttendanceRecord[] = [];
 
   for (let r = studentStartRow; r < rawMatrix.length; r++) {

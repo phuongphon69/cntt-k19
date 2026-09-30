@@ -121,7 +121,7 @@ export function matchZoomParticipants(
       currentValue,
       hasConflict,
       resolvedValue: "X",
-      confirmed: status === "MATCHED" && !hasConflict,
+      confirmed: Boolean(matchedStudentToAssign) && !hasConflict,
     });
   }
 
