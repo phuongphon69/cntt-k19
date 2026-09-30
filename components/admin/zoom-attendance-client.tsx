@@ -332,6 +332,53 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
     }
   };
 
+  const refreshCandidateDuplicates = (cands: OcrCandidate[]): OcrCandidate[] => {
+    const studentMatchMap = new Map<string, number[]>();
+    cands.forEach((c, idx) => {
+      if (c.matchedStudent?.id) {
+        const sId = c.matchedStudent.id;
+        if (!studentMatchMap.has(sId)) {
+          studentMatchMap.set(sId, []);
+        }
+        studentMatchMap.get(sId)!.push(idx);
+      }
+    });
+
+    return cands.map((c, idx) => {
+      const sId = c.matchedStudent?.id;
+      if (!sId) {
+        return { ...c, isDuplicate: false, duplicateWarning: undefined };
+      }
+      const matchingIndices = studentMatchMap.get(sId) || [];
+      if (matchingIndices.length <= 1) {
+        return { ...c, isDuplicate: false, duplicateWarning: undefined };
+      }
+
+      let bestIdx = matchingIndices[0];
+      let maxScore = cands[matchingIndices[0]].confidenceScore;
+      for (const mIdx of matchingIndices) {
+        if (cands[mIdx].confidenceScore > maxScore) {
+          maxScore = cands[mIdx].confidenceScore;
+          bestIdx = mIdx;
+        }
+      }
+
+      if (idx !== bestIdx) {
+        return {
+          ...c,
+          isDuplicate: true,
+          duplicateWarning: `Trùng học viên "${c.matchedStudent?.fullName}" (dòng khác có độ khớp cao hơn: ${maxScore}%)`,
+        };
+      } else {
+        return {
+          ...c,
+          isDuplicate: true,
+          duplicateWarning: `Có ${matchingIndices.length - 1} dòng khác cùng khớp với học viên này`,
+        };
+      }
+    });
+  };
+
   const toggleCandidateConfirm = (idx: number) => {
     setCandidates((prev) =>
       prev.map((c, i) => (i === idx ? { ...c, confirmed: !c.confirmed } : c))
@@ -340,19 +387,20 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
 
   const changeCandidateStudent = (idx: number, studentId: string) => {
     const stu = students.find((s) => s.id === studentId);
-    setCandidates((prev) =>
-      prev.map((c, i) =>
+    setCandidates((prev) => {
+      const updated = prev.map((c, i) =>
         i === idx
           ? {
               ...c,
               matchedStudent: stu,
               confidenceScore: stu ? 100 : 0,
-              status: stu ? "MATCHED" : "UNMATCHED",
+              status: (stu ? "MATCHED" : "UNMATCHED") as any,
               confirmed: Boolean(stu),
             }
           : c
-      )
-    );
+      );
+      return refreshCandidateDuplicates(updated);
+    });
   };
 
   const confirmedCandidates = candidates.filter((c) => c.confirmed && c.matchedStudent);
@@ -363,9 +411,34 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
       return;
     }
 
+    // Rà soát trường hợp trùng lặp học viên khi xác nhận
+    const studentIdCounts: Record<string, number> = {};
+    for (const c of confirmedCandidates) {
+      const sId = c.matchedStudent!.id;
+      studentIdCounts[sId] = (studentIdCounts[sId] || 0) + 1;
+    }
+    const duplicateIds = Object.keys(studentIdCounts).filter((id) => studentIdCounts[id] > 1);
+    if (duplicateIds.length > 0) {
+      const dupNames = duplicateIds.map((id) => {
+        const found = confirmedCandidates.find((c) => c.matchedStudent?.id === id);
+        return found ? found.matchedStudent!.fullName : id;
+      });
+      alert(
+        `⚠️ CẢNH BÁO TRÙNG HỌC VIÊN:\nPhát hiện ${duplicateIds.length} học viên đang được chọn trùng lặp nhiều lần:\n\n` +
+        dupNames.map((n) => `• ${n}`).join("\n") +
+        "\n\nVui lòng kiểm tra danh sách và bỏ chọn các dòng trùng lặp trước khi ghi vào Google Sheets!"
+      );
+      return;
+    }
+
     setSaving(true);
     setSuccessMessage("");
     try {
+      const updates = confirmedCandidates.map((c) => ({
+        studentId: c.matchedStudent!.id,
+        value: (c.resolvedValue || "X") as AttendanceValue,
+      }));
+
       const records = confirmedCandidates.map((c) => ({
         studentId: c.matchedStudent!.id,
         round1: roundNumber === 1 ? ("X" as AttendanceValue) : undefined,
@@ -373,20 +446,22 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         round3: roundNumber === 3 ? ("X" as AttendanceValue) : undefined,
       }));
 
-      const res = await fetch("/api/admin/attendance", {
+      const res = await fetch("/api/admin/attendance/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sheetName: selectedSubjectSheet,
           sessionDate,
+          roundNumber,
+          updates,
           records,
           rawOcrNames: candidates.map((c) => c.rawText),
           confirmedStudentIds: confirmedCandidates.map((c) => c.matchedStudent!.id),
         }),
       });
 
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setSuccessMessage(
           `✓ Đã ghi nhận thành công ${confirmedCandidates.length} học viên có mặt vào cột Lần ${roundNumber} (${sessionDate}) trên Google Sheets!`
         );
@@ -396,10 +471,10 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         setFiles([]);
         setRawText("");
       } else {
-        alert("Lỗi ghi dữ liệu vào Google Sheets: " + (data.error || "Không thể ghi"));
+        alert("Lỗi ghi dữ liệu vào Google Sheets: " + (data.error || res.statusText || "Không thể ghi"));
       }
     } catch (err: any) {
-      alert("Lỗi kết nối máy chủ khi ghi điểm danh");
+      alert("Lỗi kết nối máy chủ khi ghi điểm danh: " + (err?.message || "Vui lòng kiểm tra lại"));
     } finally {
       setSaving(false);
     }
@@ -802,6 +877,12 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
                   ⚠️ Cần rà soát: {ocrSummary.reviewCount}
                 </div>
               )}
+              {ocrSummary.duplicateCount > 0 && (
+                <div className="px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800 text-xs font-bold text-orange-700 dark:text-orange-300 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                  <span>Trùng lặp: {ocrSummary.duplicateCount}</span>
+                </div>
+              )}
               {ocrSummary.unmatchedStudents.length > 0 && (
                 <button
                   type="button"
@@ -884,6 +965,13 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
                             <span>Đã có dữ liệu trước đó: &quot;{cand.currentValue}&quot;</span>
                           </div>
                         )}
+
+                        {cand.isDuplicate && (
+                          <div className="text-[11px] font-bold text-orange-600 dark:text-orange-400 flex items-center gap-1 bg-orange-50 dark:bg-orange-950/60 px-2 py-0.5 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <AlertTriangle className="w-3 h-3 text-orange-500 shrink-0" />
+                            <span>⚠️ {cand.duplicateWarning || "Trùng học viên với dòng khác"}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -926,7 +1014,27 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
 
             <button
               type="button"
-              onClick={() => setShowPreviewModal(true)}
+              onClick={() => {
+                const studentIdCounts: Record<string, number> = {};
+                for (const c of confirmedCandidates) {
+                  const sId = c.matchedStudent!.id;
+                  studentIdCounts[sId] = (studentIdCounts[sId] || 0) + 1;
+                }
+                const duplicateIds = Object.keys(studentIdCounts).filter((id) => studentIdCounts[id] > 1);
+                if (duplicateIds.length > 0) {
+                  const dupNames = duplicateIds.map((id) => {
+                    const found = confirmedCandidates.find((c) => c.matchedStudent?.id === id);
+                    return found ? found.matchedStudent!.fullName : id;
+                  });
+                  alert(
+                    `⚠️ NHẮC NHỞ TRÙNG HỌC VIÊN:\nCó ${duplicateIds.length} học viên đang bị chọn trùng lặp:\n\n` +
+                    dupNames.map((n) => `• ${n}`).join("\n") +
+                    "\n\nVui lòng bỏ chọn bớt hoặc gán đúng sinh viên trước khi tiếp tục xác nhận."
+                  );
+                  return;
+                }
+                setShowPreviewModal(true);
+              }}
               className="px-6 py-3 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2"
             >
               <Check className="w-4 h-4" />

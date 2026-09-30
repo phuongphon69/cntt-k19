@@ -184,6 +184,9 @@ export interface OcrCandidate {
   hasConflict?: boolean;
   resolvedValue?: AttendanceValue;
   confirmed?: boolean;
+  // Duplicate detection
+  isDuplicate?: boolean;
+  duplicateWarning?: string;
 }
 
 export interface OcrResultSummary {
@@ -191,6 +194,7 @@ export interface OcrResultSummary {
   matchedCount: number;
   reviewCount: number;
   unmatchedCount: number;
+  duplicateCount: number;
   candidates: OcrCandidate[];
   unmatchedStudents: PublicStudent[]; // Students in class that were NOT recognized in images
 }

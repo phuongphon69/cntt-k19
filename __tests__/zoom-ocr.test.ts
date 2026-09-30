@@ -117,4 +117,71 @@ describe("Zoom OCR Parser & Matcher", () => {
     expect(huan?.status).toBe("MATCHED");
     expect(huan?.confidenceScore).toBeGreaterThanOrEqual(95);
   });
+
+  it("handles user screenshot names with avatar prefixes and prevents auto-matching low scores", () => {
+    const rawLines = [
+      "Po Pham Đinh Diện CNTTk1931.0.. & [A",
+      "Ps Phùng Ba Hoan 8/3/1991K19.C... 2 (Zf",
+      "Lê Trần Ngọc Bảo 06/12/2001_CN... © [A",
+      "(1 Trần Thế Anh 08/05/2000. CNTT... © (Zá",
+      "Lại Trình Đức Thịnh 21/9/1992 K19... 2 (Z4",
+      "Mà Võ Trọng Tường sn11/4/1981K19... © [4",
+      "Dạ Đào Xuân Quế 14.07.1986 K19 C... 2. (Z4",
+      "We es x",
+    ];
+
+    const roster: PublicStudent[] = [
+      { id: "pham_dinh_dien", fullName: "Phạm Đình Diện", dateOfBirth: "31/01/1985" },
+      { id: "phung_ba_hoan", fullName: "Phùng Bá Hoan", dateOfBirth: "08/03/1991" },
+      { id: "tran_ngoc_bao", fullName: "Trần Ngọc Bảo", dateOfBirth: "06/12/2001" },
+      { id: "tran_the_anh", fullName: "Trần Thế Anh", dateOfBirth: "08/05/2000" },
+      { id: "trinh_duc_thinh", fullName: "Trịnh Đức Thịnh", dateOfBirth: "21/09/1992" },
+      { id: "vo_trong_tuong", fullName: "Võ Trọng Tường", dateOfBirth: "11/04/1981" },
+      { id: "dao_xuan_que", fullName: "Đào Xuân Quế", dateOfBirth: "14/07/1986" },
+    ];
+
+    const parsed = rawLines.map((l) => parseZoomDisplayName(l));
+    const summary = matchZoomParticipants(parsed, roster);
+
+    // Verify all 7 real students are matched with high confidence
+    expect(summary.matchedCount).toBe(7);
+
+    // Verify "We es x" is UNMATCHED and NOT assigned to any student
+    const weEs = summary.candidates.find((c) => c.rawText.includes("We es"));
+    expect(weEs?.status).toBe("UNMATCHED");
+    expect(weEs?.matchedStudent).toBeUndefined();
+    expect(weEs?.confirmed).toBe(false);
+
+    // Verify individual student matches have clean names and >= 90% confidence
+    const que = summary.candidates.find((c) => c.matchedStudent?.id === "dao_xuan_que");
+    expect(que?.status).toBe("MATCHED");
+    expect(que?.confidenceScore).toBeGreaterThanOrEqual(95);
+
+    const dien = summary.candidates.find((c) => c.matchedStudent?.id === "pham_dinh_dien");
+    expect(dien?.status).toBe("MATCHED");
+    expect(dien?.confidenceScore).toBeGreaterThanOrEqual(95);
+  });
+
+  it("detects duplicate student matches and marks secondary with isDuplicate and confirmed=false", () => {
+    const rawLines = [
+      "Dạ Đào Xuân Quế 14.07.1986",
+      "Đào Xuân Quế Zoom phụ",
+    ];
+
+    const roster: PublicStudent[] = [
+      { id: "dao_xuan_que", fullName: "Đào Xuân Quế", dateOfBirth: "14/07/1986" },
+    ];
+
+    const parsed = rawLines.map((l) => parseZoomDisplayName(l));
+    const summary = matchZoomParticipants(parsed, roster);
+
+    expect(summary.duplicateCount).toBe(1);
+    expect(summary.candidates[0].isDuplicate).toBe(true);
+    expect(summary.candidates[1].isDuplicate).toBe(true);
+    // Highest score stays confirmed; secondary gets confirmed=false
+    const confirmedCount = summary.candidates.filter((c) => c.confirmed).length;
+    expect(confirmedCount).toBe(1);
+    expect(summary.candidates[1].confirmed).toBe(false);
+    expect(summary.candidates[1].duplicateWarning).toContain("Trùng học viên");
+  });
 });

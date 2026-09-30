@@ -24,7 +24,7 @@ export function parseZoomDisplayName(rawLine: string): ParsedZoomName {
 
   // 1. Extract Date of Birth if present (formats: dd/mm/yyyy, dd.mm.yyyy, dd-mm-yyyy, /dd.m.yyyy, or dd.mm/dd/mm)
   let extractedDob: string | undefined = undefined;
-  const dobRegex = /(?:\/)?(\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?)/;
+  const dobRegex = /(?:sn|ns|sinh\s*ngày)?\s*[:.]?\s*(?:\/)?(\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?)/i;
   const dobMatch = text.match(dobRegex);
   if (dobMatch) {
     extractedDob = dobMatch[1].replace(/[.-]/g, "/");
@@ -39,27 +39,32 @@ export function parseZoomDisplayName(rawLine: string): ParsedZoomName {
   // 3. Remove common Zoom labels / tags / noise tokens
   const noisePatterns = [
     /\b(tôi|me|host|co-host|chủ trì|đồng chủ trì|guest|you)\b/gi,
-    /\b(k\s*19|cntt|cđ|cd|lt|cq|khoa|lớp|lop)\b/gi,
+    /\b(k\s*19\w*|cntt\w*|cnt|cđ|cd|lt|cq|khoa|lớp|lop)\b/gi,
     /\b(ch\s*\d+|z\s*\d+|zf|z4|z1|cam|mic)\b/gi,
-    /\bk\d+\b/gi,
+    /\bk\d+\w*\b/gi,
+    /\b(sn|ns)\b/gi,
   ];
 
   for (const pat of noisePatterns) {
     text = text.replace(pat, " ");
   }
 
-  // 4. Remove leading numbers (STT e.g. "1 ", "01 ", "2 ")
-  text = text.replace(/^\s*\d+\s+/, " ");
+  // 4. Remove leading numbers / brackets (STT e.g. "1 ", "(1 ", "[1 ", "01 ", "2 ")
+  text = text.replace(/^\s*[(\[]?\s*\d+\s*[)\].,]?\s*/, " ");
 
   // 5. Clean whitespace before token check
   text = text.replace(/\s+/g, " ").trim();
 
-  // 6. Repeatedly remove trailing noise codes/single letters/numbers (e.g. ' 5 A', ' Z4', ' Zf', ' Ö', ' x', ' 2')
+  // 6. Repeatedly remove trailing noise codes/single letters/numbers (e.g. ' 5 A', ' Z4', ' Zf', ' Ö', ' x', ' 2', ' Zá')
   while (true) {
     const words = text.split(" ");
     if (words.length <= 2) break;
     const lastWord = words[words.length - 1];
-    if (/^[a-zA-Z0-9]{1,2}$/.test(lastWord) || /^\d+$/.test(lastWord)) {
+    if (
+      /^[a-zA-Z0-9]{1,2}$/.test(lastWord) ||
+      /^\d+$/.test(lastWord) ||
+      /^(z\d*|zf|zá|za|z4|cam|mic|x|a)$/i.test(lastWord)
+    ) {
       words.pop();
       text = words.join(" ");
     } else {
@@ -67,16 +72,18 @@ export function parseZoomDisplayName(rawLine: string): ParsedZoomName {
     }
   }
 
-  // 7. Strip leading Zoom avatar circle initials (1-2 letters) before real name
-  // E.g. 'Ne Nguyễn Huy Phương' -> 'Nguyễn Huy Phương', 'BH Bùi Hong Quân' -> 'Bùi Hong Quân'
+  // 7. Strip leading Zoom avatar circle initials (1-3 letters) before real name
+  // E.g. 'Po Pham Đinh Diện' -> 'Pham Đinh Diện', 'Mà Võ Trọng Tường' -> 'Võ Trọng Tường',
+  // 'Dạ Đào Xuân Quế' -> 'Đào Xuân Quế', 'Lại Trình Đức Thịnh' -> 'Trình Đức Thịnh', 'BH Bùi Hong Quân' -> 'Bùi Hong Quân'
   const words = text.split(" ");
-  if (words.length >= 3 && words[0].length <= 2 && /^[a-zA-Z]+$/.test(words[0])) {
+  if (words.length >= 3) {
     const familyNames = [
-      "nguyen", "bui", "le", "hoang", "tran", "pham", "trinh", "vo", "mai",
-      "dao", "phan", "duong", "phung", "truong", "ngo", "vu", "dang", "dinh", "ha", "do"
+      "nguyen", "bui", "le", "hoang", "huynh", "tran", "pham", "trinh", "vo", "mai",
+      "dao", "phan", "duong", "phung", "truong", "ngo", "vu", "dang", "dinh", "ha", "do", "doan", "ho", "ly", "luong", "ta", "thai"
     ];
-    const secondNorm = removeVietnameseAccents(words[1]).toLowerCase();
-    if (familyNames.includes(secondNorm)) {
+    const secondWordNorm = removeVietnameseAccents(words[1]).toLowerCase();
+    // If first word is short (<= 3 chars) and second word is a known Vietnamese family name
+    if (words[0].length <= 3 && familyNames.includes(secondWordNorm)) {
       words.shift();
       text = words.join(" ");
     }
@@ -124,7 +131,9 @@ export function parseZoomOcrText(ocrText: string): ParsedZoomName[] {
       lower.includes("ảnh được cung cấp") ||
       lower.includes("giao diện trang web") ||
       lower.includes("vui lòng tải lên") ||
-      lower.includes("không tìm thấy")
+      lower.includes("không tìm thấy") ||
+      lower.startsWith("we es") ||
+      lower === "we es x"
     ) {
       continue;
     }

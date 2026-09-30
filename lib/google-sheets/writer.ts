@@ -126,7 +126,10 @@ export async function writeAttendanceRound(
   }
 
   // 4b. Write directly to Google Sheets via Google Apps Script Webhook
-  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL;
+  const webhookUrl =
+    process.env.NODE_ENV === "test"
+      ? (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || "")
+      : (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL);
   if (webhookUrl && webhookUrl.length > 0) {
     try {
       const resp = await fetch(webhookUrl, {
@@ -139,8 +142,15 @@ export async function writeAttendanceRound(
           sessionIndex: session.index,
           roundNumber,
           updates,
+          students: (await getStudents()).map((s, idx) => ({
+            stt: idx + 1,
+            fullName: s.fullName,
+            dateOfBirth: s.dateOfBirth || "",
+            studySystem: s.studySystem || "",
+            dateJoinedGroup: s.dateJoinedGroup || "",
+          })),
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(6000),
       });
       const resData = await resp.json().catch(() => ({}));
       if (resData.sheetCreated) {
@@ -289,7 +299,10 @@ export async function createNewSubjectSheet(
   }
 
   // Create sheet via Google Apps Script Webhook
-  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL;
+  const webhookUrl =
+    process.env.NODE_ENV === "test"
+      ? (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || "")
+      : (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL);
   if (webhookUrl && webhookUrl.length > 0) {
     try {
       await fetch(webhookUrl, {
@@ -299,8 +312,17 @@ export async function createNewSubjectSheet(
           action: "createSheet",
           sheetName: newSheetName,
           subjectName,
+          teacherName,
+          totalSessions,
+          students: activeStudents.map((s, idx) => ({
+            stt: idx + 1,
+            fullName: s.fullName,
+            dateOfBirth: s.dateOfBirth || "",
+            studySystem: s.studySystem || "",
+            dateJoinedGroup: s.dateJoinedGroup || "",
+          })),
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(6000),
       });
     } catch (err) {
       console.warn("[AppsScript Webhook createSheet error]:", err);

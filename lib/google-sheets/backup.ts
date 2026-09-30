@@ -463,32 +463,152 @@ export async function exportAttendanceCsv(): Promise<string> {
  */
 export function getGoogleAppsScriptSnippet(): string {
   return `/**
- * GOOGLE APPS SCRIPT WEB APP - SAO LƯU ĐIỂM DANH LỚP CNTT - K19 CĐ
- * Hướng dẫn cài đặt 1 phút:
- * 1. Mở Google Sheet -> Menu "Tiện ích mở rộng" (Extensions) -> "Apps Script"
- * 2. Dán toàn bộ mã này vào và bấm biểu tượng "Lưu" (Save - Ctrl+S)
- * 3. Bấm "Triển khai" (Deploy) -> "Triển khai mới" (New deployment)
- * 4. Chọn loại: "Ứng dụng web" (Web App)
- *    - Thực thi với tư cách: "Tôi" (Me)
- *    - Ai có quyền truy cập: "Bất kỳ ai" (Anyone)
- * 5. Copy URL Ứng dụng web được cấp và dán vào Hệ thống Điểm danh (Trang Sao Lưu Google Sheet).
+ * GOOGLE APPS SCRIPT WEB APP - HỆ THỐNG ĐIỂM DANH & SAO LƯU CNTT - K19 CĐ
+ * Hỗ trợ 3 tính năng:
+ * 1. Tự động tạo Sheet môn mới chuẩn sĩ số toàn bộ lớp (43 học sinh) từ template MẪU MÔN HỌC
+ * 2. Tự động ghi điểm danh trực tiếp vào ô tương ứng
+ * 3. Sao lưu toàn bộ báo cáo chuyên cần vào sheet SAO_LUU_DIEM_DANH
  */
 
 function doPost(e) {
   try {
-    var data = JSON.parse(e.postData.contents);
+    var contents = e.postData ? e.postData.contents : "";
+    var data = JSON.parse(contents || "{}");
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
+
+    // Hàm lấy danh sách 43 sinh viên đầy đủ từ CNTT - K19 hoặc payload
+    function getFullClassRoster() {
+      if (data.students && Array.isArray(data.students) && data.students.length > 0) {
+        return data.students;
+      }
+      var masterSheet = ss.getSheetByName("CNTT - K19");
+      if (!masterSheet) return [];
+      var values = masterSheet.getDataRange().getValues();
+      var roster = [];
+      var startRow = 1;
+      for (var r = 0; r < Math.min(5, values.length); r++) {
+        var rowStr = values[r].join(" ").toUpperCase();
+        if (rowStr.indexOf("HỌ VÀ") !== -1 || rowStr.indexOf("TÊN") !== -1) {
+          startRow = r + 1;
+          break;
+        }
+      }
+      for (var r = startRow; r < values.length; r++) {
+        var row = values[r];
+        var hoVa = String(row[1] || "").trim();
+        var ten = String(row[2] || "").trim();
+        if (!hoVa && !ten) continue;
+        var fullName = (hoVa + " " + ten).replace(/\\s+/g, " ").trim();
+        var dob = row[3] instanceof Date ? Utilities.formatDate(row[3], "GMT+7", "dd/MM/yyyy") : String(row[3] || "").trim();
+        var studySystem = String(row[11] || "").trim();
+        var dateJoined = String(row[12] || "").trim();
+        roster.push({
+          stt: roster.length + 1,
+          fullName: fullName,
+          dateOfBirth: dob,
+          studySystem: studySystem,
+          dateJoinedGroup: dateJoined
+        });
+      }
+      return roster;
+    }
+
+    // Hàm mở rộng và nạp đầy đủ sĩ số lớp vào sheet môn học
+    function ensureFullRosterInSheet(targetSheet) {
+      var roster = getFullClassRoster();
+      if (!roster || roster.length === 0) return;
+      var lastRow = targetSheet.getLastRow();
+      var currentStudentCount = Math.max(0, lastRow - 3);
+      if (currentStudentCount < roster.length) {
+        targetSheet.insertRowsAfter(lastRow, roster.length - currentStudentCount);
+      }
+      var rowsToWrite = roster.map(function(s, idx) {
+        return [idx + 1, s.fullName, s.dateOfBirth || "", s.studySystem || "", s.dateJoinedGroup || ""];
+      });
+      targetSheet.getRange(4, 1, rowsToWrite.length, 5).setValues(rowsToWrite);
+      targetSheet.getRange(4, 1, rowsToWrite.length, 1).setHorizontalAlignment("center");
+      targetSheet.getRange(4, 2, rowsToWrite.length, 1).setHorizontalAlignment("left");
+      targetSheet.getRange(4, 3, rowsToWrite.length, 3).setHorizontalAlignment("center");
+    }
+
+    // 1. TỰ ĐỘNG TẠO SHEET MÔN MỚI
+    if (data.action === "createSheet" || (data.sheetName && !ss.getSheetByName(data.sheetName))) {
+      var sheet = ss.getSheetByName(data.sheetName);
+      var sheetCreated = false;
+      if (!sheet) {
+        var template = ss.getSheetByName("MẪU MÔN HỌC");
+        sheet = template ? template.copyTo(ss).setName(data.sheetName) : ss.insertSheet(data.sheetName);
+        sheetCreated = true;
+      }
+      var subjName = data.subjectName || data.sheetName.replace(/^DD\\s+/i, "");
+      sheet.getRange(1, 2).setValue(subjName);
+      if (data.teacherName) sheet.getRange(1, 4).setValue(data.teacherName);
+      if (data.totalSessions) sheet.getRange(1, 6).setValue(data.totalSessions);
+      ensureFullRosterInSheet(sheet);
+
+      if (data.action === "createSheet") {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          sheetCreated: sheetCreated,
+          sheetName: data.sheetName,
+          totalStudents: sheet.getLastRow() - 3
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // 2. GHI ĐIỂM DANH TRỰC TIẾP
+    if (data.action === "writeAttendance") {
+      var sheet = ss.getSheetByName(data.sheetName);
+      if (!sheet) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Không tìm thấy sheet " + data.sheetName })).setMimeType(ContentService.MimeType.JSON);
+      }
+      if (sheet.getLastRow() - 3 < 30) {
+        ensureFullRosterInSheet(sheet);
+      }
+      var matrix = sheet.getDataRange().getValues();
+      var sessionDate = String(data.sessionDate || "").trim();
+      var roundNumber = Number(data.roundNumber || 1);
+      var sessionIndex = Number(data.sessionIndex || 1);
+      var targetCol = -1;
+      for (var c = 5; c < (matrix[0] ? matrix[0].length : 0); c++) {
+        var cellDate = String(matrix[0][c] || "").trim();
+        if (cellDate && sessionDate && (cellDate === sessionDate || cellDate.indexOf(sessionDate) !== -1 || sessionDate.indexOf(cellDate) !== -1)) {
+          targetCol = c + roundNumber;
+          break;
+        }
+      }
+      if (targetCol === -1) {
+        targetCol = 6 + (sessionIndex - 1) * 4 + (roundNumber - 1);
+      }
+      var updateMap = {};
+      (data.updates || []).forEach(function(u) { updateMap[u.studentId] = u.value; });
+      var updatedCount = 0;
+      for (var r = 3; r < matrix.length; r++) {
+        var rawName = String(matrix[r][1] || "").trim();
+        if (!rawName) continue;
+        var norm = rawName.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+        for (var sId in updateMap) {
+          if (norm.indexOf(sId) !== -1 || sId.indexOf(norm) !== -1) {
+            sheet.getRange(r + 1, targetCol).setValue(updateMap[sId]);
+            updatedCount++;
+            break;
+          }
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        updatedCount: updatedCount,
+        sheetName: data.sheetName,
+        targetCol: targetCol,
+        totalStudents: sheet.getLastRow() - 3
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 3. SAO LƯU ĐIỂM DANH TOÀN DIỆN
     if (data.action === "BACKUP_ATTENDANCE") {
       var sheetName = data.sheetName || "SAO_LUU_DIEM_DANH";
-      var sheet = ss.getSheetByName(sheetName);
-      if (!sheet) {
-        sheet = ss.insertSheet(sheetName);
-      }
-      
-      // Xóa nội dung cũ để ghi bản sao lưu mới nhất
+      var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
       sheet.clearContents();
-      
       var matrix = data.matrixData || [];
       if (matrix.length > 0) {
         var numRows = matrix.length;
@@ -496,43 +616,31 @@ function doPost(e) {
         for (var i = 1; i < numRows; i++) {
           if (matrix[i].length > numCols) numCols = matrix[i].length;
         }
-        
-        // Cân bằng số cột
         var cleanMatrix = matrix.map(function(row) {
           while (row.length < numCols) row.push("");
           return row;
         });
-        
         sheet.getRange(1, 1, numRows, numCols).setValues(cleanMatrix);
-        
-        // Định dạng tiêu đề đẹp mắt
         sheet.getRange(1, 1).setFontSize(14).setFontWeight("bold");
         sheet.getRange(4, 1, 1, numCols).setBackground("#EEF2FF").setFontWeight("bold");
       }
-      
       return ContentService.createTextOutput(JSON.stringify({
         success: true,
         message: "Sao lưu thành công vào sheet " + sheetName,
         timestamp: new Date().toISOString()
       })).setMimeType(ContentService.MimeType.JSON);
     }
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: "Hành động không hợp lệ"
-    })).setMimeType(ContentService.MimeType.JSON);
+
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Hành động không hợp lệ" })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "ONLINE",
-    app: "CNTT K19 CĐ Attendance Backup Web App",
+    app: "CNTT K19 CĐ Google Sheet Attendance & Backup Web App",
     time: new Date().toISOString()
   })).setMimeType(ContentService.MimeType.JSON);
 }

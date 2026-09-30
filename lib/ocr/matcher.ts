@@ -82,34 +82,39 @@ export function matchZoomParticipants(
     }
 
     let status: "MATCHED" | "NEEDS_REVIEW" | "UNMATCHED" = "UNMATCHED";
+    let matchedStudentToAssign: PublicStudent | undefined = undefined;
+
     if (bestScore >= highThreshold) {
       status = "MATCHED";
+      matchedStudentToAssign = bestStudent;
     } else if (bestScore >= reviewThreshold) {
       status = "NEEDS_REVIEW";
+      matchedStudentToAssign = bestStudent;
     } else {
       status = "UNMATCHED";
+      matchedStudentToAssign = undefined;
     }
 
     // Check conflict with existing cell value
     let hasConflict = false;
     let currentValue: AttendanceValue = "";
-    if (bestStudent && currentAttendance[bestStudent.id]) {
-      currentValue = currentAttendance[bestStudent.id];
+    if (matchedStudentToAssign && currentAttendance[matchedStudentToAssign.id]) {
+      currentValue = currentAttendance[matchedStudentToAssign.id];
       // Conflict if current value is already set (e.g. "P", "M") and not empty or "X"
       if (currentValue && currentValue !== "X") {
         hasConflict = true;
       }
     }
 
-    if (bestStudent && (status === "MATCHED" || status === "NEEDS_REVIEW")) {
-      matchedStudentIds.add(bestStudent.id);
+    if (matchedStudentToAssign && (status === "MATCHED" || status === "NEEDS_REVIEW")) {
+      matchedStudentIds.add(matchedStudentToAssign.id);
     }
 
     candidates.push({
       rawText: item.original,
       cleanedName: item.cleanedName,
       extractedDob: item.extractedDob,
-      matchedStudent: bestStudent,
+      matchedStudent: matchedStudentToAssign,
       confidenceScore: bestScore,
       status,
       matchedByAlias,
@@ -119,6 +124,48 @@ export function matchZoomParticipants(
       confirmed: status === "MATCHED" && !hasConflict,
     });
   }
+
+  // 3. Detect duplicate student matches across candidates
+  // Group candidates matching the same student ID
+  const studentMatchMap = new Map<string, number[]>(); // studentId -> candidate indices
+  candidates.forEach((c, idx) => {
+    if (c.matchedStudent?.id) {
+      const sId = c.matchedStudent.id;
+      if (!studentMatchMap.has(sId)) {
+        studentMatchMap.set(sId, []);
+      }
+      studentMatchMap.get(sId)!.push(idx);
+    }
+  });
+
+  let duplicateCount = 0;
+  studentMatchMap.forEach((indices) => {
+    if (indices.length > 1) {
+      // Find candidate with the highest confidence score
+      let bestIdx = indices[0];
+      let maxScore = candidates[indices[0]].confidenceScore;
+      for (const idx of indices) {
+        if (candidates[idx].confidenceScore > maxScore) {
+          maxScore = candidates[idx].confidenceScore;
+          bestIdx = idx;
+        }
+      }
+
+      // Mark all other indices as duplicates with warnings
+      for (const idx of indices) {
+        if (idx !== bestIdx) {
+          candidates[idx].isDuplicate = true;
+          candidates[idx].duplicateWarning = `Trùng học viên "${candidates[idx].matchedStudent?.fullName}" (dòng khác có độ khớp cao hơn: ${maxScore}%)`;
+          candidates[idx].status = "NEEDS_REVIEW";
+          candidates[idx].confirmed = false; // Never auto-confirm duplicate candidates!
+          duplicateCount++;
+        } else {
+          candidates[idx].isDuplicate = true;
+          candidates[idx].duplicateWarning = `Có ${indices.length - 1} dòng khác cùng khớp với học viên này`;
+        }
+      }
+    }
+  });
 
   // Find all students in class not present in the Zoom OCR list
   const unmatchedStudents = students.filter((s) => !matchedStudentIds.has(s.id));
@@ -132,6 +179,7 @@ export function matchZoomParticipants(
     matchedCount,
     reviewCount,
     unmatchedCount,
+    duplicateCount,
     candidates,
     unmatchedStudents,
   };

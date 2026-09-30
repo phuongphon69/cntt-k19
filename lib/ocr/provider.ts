@@ -29,15 +29,21 @@ export class GeminiOcrProvider implements OcrProvider {
   async recognize(imageBuffer: Buffer, mimeType = "image/jpeg"): Promise<OcrResult> {
     const base64Image = imageBuffer.toString("base64");
 
-    const prompt = `Đây là ảnh chụp màn hình danh sách người tham gia Zoom.
-Hãy trích xuất TẤT CẢ các tên người dùng hiển thị trong danh sách.
-Trả về ĐÚNG mỗi dòng là một tên, KHÔNG thêm số thứ tự hay giải thích.
-Giữ nguyên tên tiếng Việt có dấu nếu có.
-Nếu ảnh không chứa danh sách người tham gia, chỉ trả về chữ RONG.
-Ví dụ kết quả:
-Nguyễn Văn An 01.01.2005 K19 CNTT
-Phạm Thị Bình
-Trần Hoàng Nam K19`;
+    const prompt = `Bạn là chuyên gia bóc tách danh sách người tham gia phòng học Zoom tiếng Việt.
+Nhiệm vụ: Trích xuất CHỈ HỌ VÀ TÊN của từng học viên / sinh viên trong danh sách người tham gia Zoom từ ảnh.
+
+QUY TẮC BẮT BUỘC:
+1. CHỈ trích xuất đúng phần HỌ VÀ TÊN người tiếng Việt (Ví dụ: "Phạm Đình Diện", "Phùng Bá Hoan", "Trần Ngọc Bảo", "Trần Thế Anh", "Trịnh Đức Thịnh", "Võ Trọng Tường", "Đào Xuân Quế").
+2. TUYỆT ĐỐI LOẠI BỎ các thành phần gây nhiễu sau:
+   - Chữ viết tắt của ảnh đại diện/avatar ở đầu dòng (như "Po", "Ps", "Mà", "Dạ", "Lại", "BH", "ĐQ", "Ne", "We es", v.v.)
+   - Số thứ tự hoặc ký hiệu đầu dòng (như "1", "(1", "01.", v.v.)
+   - Ngày tháng năm sinh (như "31/01/1985", "8/3/1991", "sn11/4/1981", "14.07.1986", v.v.)
+   - Mã lớp, khóa học, chuyên ngành (như "CNTT", "K19", "CĐ", "Cnttk", "Cnt Zá", v.v.)
+   - Ký tự lạ, dấu ngoặc, mã thiết bị ở cuối dòng (như "(Z4)", "(Zf)", "[A", "[4", "&", "©", "x", v.v.)
+   - Các dòng giao diện hoặc chuỗi rác không phải tên người tham gia (như "Participants", "Search", "Mute All", "We es x", v.v.)
+3. Mỗi học viên là 1 dòng riêng biệt. Viết hoa chữ cái đầu mỗi từ và giữ nguyên dấu tiếng Việt chuẩn.
+4. KHÔNG thêm bất kỳ số thứ tự, gạch đầu dòng hay lời giải thích nào.
+5. Nếu ảnh không có danh sách người tham gia, chỉ trả về chữ RONG.`;
 
     const body = {
       contents: [
