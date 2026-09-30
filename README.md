@@ -64,7 +64,10 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 AUTH_SECRET="chuoi-bi-mat-jwt-tu-chon"
 ADMIN_PASSWORD="admin123"
 
-# Google Cloud Vision OCR (Tùy chọn)
+# Google Gemini AI Vision OCR (Khuyên dùng - Miễn phí tại aistudio.google.com/app/apikey)
+GEMINI_API_KEY=""
+
+# Google Cloud Vision OCR (Tùy chọn thay thế)
 GOOGLE_CLOUD_VISION_API_KEY=""
 ```
 
@@ -103,7 +106,7 @@ Truy cập ứng dụng tại: `http://localhost:3000`
    - `GOOGLE_PRIVATE_KEY` (chú ý giữ đúng ký tự `\n` hoặc dán toàn bộ key)
    - `AUTH_SECRET`
    - `ADMIN_PASSWORD`
-   - `GOOGLE_CLOUD_VISION_API_KEY` (nếu có)
+   - `GEMINI_API_KEY` (Lấy miễn phí tại [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) để nhận diện ảnh Zoom OCR)
 5. Bấm **Deploy**. Sau 1-2 phút, hệ thống sẽ sẵn sàng chạy trên production!
 
 ---

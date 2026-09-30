@@ -2,7 +2,7 @@
 // Service Worker for CNTT-K19 PWA - Push Notifications & Class Reminders
 // Version: 2.0
 
-const CACHE_NAME = "cntt-k19-v2";
+const CACHE_NAME = "cntt-k19-v3";
 const STATIC_ASSETS = ["/", "/today", "/schedule", "/subjects", "/icon-192.png", "/icon-512.png"];
 
 // ─── Install: cache static assets ───────────────────────────────────────────
@@ -25,12 +25,18 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// ─── Fetch: Network-first for API, cache-first for static ───────────────────
+// ─── Fetch: Network-first for API & Admin, cache-first for static ───────────
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET and API routes
-  if (event.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
+  // Skip non-GET, API routes, and ALL admin routes (admin must always load fresh from network)
+  if (
+    event.request.method !== "GET" ||
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/admin")
+  ) {
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)
