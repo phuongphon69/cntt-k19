@@ -5,6 +5,11 @@ import { setSessionOverride, saveCustomSubject, saveRecordedAttendanceRound, mar
 import { AttendanceValue, Student, Subject } from "@/types";
 import { normalizeVietnameseNameWithoutAccent } from "@/lib/vietnamese/normalize";
 
+// Google Apps Script Webhook URL for direct Google Sheet write & sheet auto-creation
+export const DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL =
+  process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() ||
+  "https://script.google.com/macros/s/AKfycbyCyzT1YOM0J1CITfvVnGhNLYwHKSi8QnbyhdvjQ-W4jtbtuEijgpAFmR4c0_eDZ5cnOw/exec";
+
 function columnIndexToLetter(index: number): string {
   let temp = index;
   let letter = "";
@@ -120,17 +125,18 @@ export async function writeAttendanceRound(
     updatedCount = updates.length;
   }
 
-  // 4b. If Google Apps Script Webhook is configured, write directly to Google Sheets
-  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL;
-  if (webhookUrl && webhookUrl.trim().length > 0) {
+  // 4b. Write directly to Google Sheets via Google Apps Script Webhook
+  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL;
+  if (webhookUrl && webhookUrl.length > 0) {
     try {
-      const resp = await fetch(webhookUrl.trim(), {
+      const resp = await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "writeAttendance",
           sheetName,
           sessionDate,
+          sessionIndex: session.index,
           roundNumber,
           updates,
         }),
@@ -282,11 +288,11 @@ export async function createNewSubjectSheet(
     });
   }
 
-  // If Google Apps Script Webhook is configured, also create sheet via Webhook
-  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL;
-  if (webhookUrl && webhookUrl.trim().length > 0) {
+  // Create sheet via Google Apps Script Webhook
+  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL;
+  if (webhookUrl && webhookUrl.length > 0) {
     try {
-      await fetch(webhookUrl.trim(), {
+      await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
