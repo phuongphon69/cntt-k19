@@ -1,7 +1,7 @@
 // app/api/admin/backup/download/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth/session";
-import { exportAttendanceCsv, getBackupHistory } from "@/lib/google-sheets/backup";
+import { exportAttendanceCsv, getBackupHistory, getBackupDir } from "@/lib/google-sheets/backup";
 import fs from "fs";
 import path from "path";
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const now = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 
     if (format === "json") {
-      const backupDir = path.join(process.cwd(), "data", "backups");
+      const backupDir = getBackupDir();
       if (backupId) {
         const filePath = path.join(backupDir, `${backupId}.json`);
         if (fs.existsSync(filePath)) {

@@ -25,36 +25,59 @@ export interface BackupRecord {
   message: string;
 }
 
-function ensureBackupDir() {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+import os from "os";
+
+let memoryBackupHistory: BackupRecord[] = [];
+
+export function getBackupDir(): string {
+  // 1. Try local data/backups folder (for local development)
+  try {
+    const localDir = path.join(process.cwd(), "data", "backups");
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
+    }
+    return localDir;
+  } catch (e) {
+    // 2. On Vercel / serverless (read-only filesystem), fallback to os.tmpdir()
+    try {
+      const tmpDir = path.join(os.tmpdir(), "cntt-k19-backups");
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      }
+      return tmpDir;
+    } catch (err) {
+      return os.tmpdir();
+    }
   }
 }
 
 export function getBackupHistory(): BackupRecord[] {
-  ensureBackupDir();
   try {
-    if (!fs.existsSync(HISTORY_FILE)) {
-      return [];
+    const dir = getBackupDir();
+    const historyFile = path.join(dir, "history.json");
+    if (fs.existsSync(historyFile)) {
+      const raw = fs.readFileSync(historyFile, "utf-8");
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) {
+        return list;
+      }
     }
-    const raw = fs.readFileSync(HISTORY_FILE, "utf-8");
-    return JSON.parse(raw);
   } catch (e) {
-    console.warn("[getBackupHistory] Failed to read history:", e);
-    return [];
+    console.warn("[getBackupHistory] Reading history file failed, falling back to memory:", e);
   }
+  return memoryBackupHistory;
 }
 
 function saveBackupRecord(record: BackupRecord) {
-  ensureBackupDir();
   try {
-    const list = getBackupHistory();
-    list.unshift(record);
-    // Keep last 50 backups
-    const trimmed = list.slice(0, 50);
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(trimmed, null, 2), "utf-8");
+    memoryBackupHistory.unshift(record);
+    memoryBackupHistory = memoryBackupHistory.slice(0, 50);
+
+    const dir = getBackupDir();
+    const historyFile = path.join(dir, "history.json");
+    fs.writeFileSync(historyFile, JSON.stringify(memoryBackupHistory, null, 2), "utf-8");
   } catch (e) {
-    console.warn("[saveBackupRecord] Failed to save history:", e);
+    console.warn("[saveBackupRecord] Could not persist history to file, kept safely in memory:", e);
   }
 }
 
@@ -76,7 +99,6 @@ export async function performGoogleSheetBackup(adminUser = "admin"): Promise<{
   destinationSheet: string;
   message: string;
 }> {
-  ensureBackupDir();
   const timestamp = new Date().toISOString();
   const backupId = `backup-${Date.now()}`;
   const formattedTime = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -277,11 +299,16 @@ export async function performGoogleSheetBackup(adminUser = "admin"): Promise<{
     recordedRounds,
   };
 
-  fs.writeFileSync(
-    path.join(BACKUP_DIR, `${backupId}.json`),
-    JSON.stringify(snapshot, null, 2),
-    "utf-8"
-  );
+  try {
+    const dir = getBackupDir();
+    fs.writeFileSync(
+      path.join(dir, `${backupId}.json`),
+      JSON.stringify(snapshot, null, 2),
+      "utf-8"
+    );
+  } catch (snapErr) {
+    console.warn("[performGoogleSheetBackup] Could not save snapshot to disk, continuing:", snapErr);
+  }
 
   const backupRecord: BackupRecord = {
     id: backupId,

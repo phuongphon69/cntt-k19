@@ -9,12 +9,43 @@ import { AdminBackupClient } from "@/components/admin/admin-backup-client";
 export const dynamic = "force-dynamic";
 
 export default async function AdminBackupPage() {
-  const spreadsheetId = getSpreadsheetId();
-  const client = getGoogleSheetsClient();
-  const students = await getStudents();
-  const subjects = await getSubjects();
-  const history = getBackupHistory();
-  const snippet = getGoogleAppsScriptSnippet();
+  let spreadsheetId = "";
+  let client = null;
+  let students: any[] = [];
+  let subjects: any[] = [];
+  let history: any[] = [];
+  let snippet = "";
+
+  try {
+    spreadsheetId = getSpreadsheetId();
+    client = getGoogleSheetsClient();
+  } catch (e) {
+    console.warn("[AdminBackupPage] spreadsheetId/client init warning:", e);
+  }
+
+  try {
+    students = await getStudents();
+  } catch (e) {
+    console.warn("[AdminBackupPage] getStudents warning:", e);
+  }
+
+  try {
+    subjects = await getSubjects();
+  } catch (e) {
+    console.warn("[AdminBackupPage] getSubjects warning:", e);
+  }
+
+  try {
+    history = getBackupHistory();
+  } catch (e) {
+    console.warn("[AdminBackupPage] getBackupHistory warning:", e);
+  }
+
+  try {
+    snippet = getGoogleAppsScriptSnippet();
+  } catch (e) {
+    console.warn("[AdminBackupPage] snippet warning:", e);
+  }
 
   return (
     <div className="space-y-6 max-w-5xl">
