@@ -7,6 +7,7 @@ import { getSubjects, getAttendanceSheetData } from "@/lib/google-sheets/reader"
 import { MatrixTable } from "@/components/attendance/matrix-table";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 interface SubjectDetailPageProps {
   params: { id: string };
@@ -23,7 +24,7 @@ export default async function SubjectDetailPage({ params }: SubjectDetailPagePro
     notFound();
   }
 
-  const attendanceData = await getAttendanceSheetData(subject.attendanceSheet);
+  const attendanceData = await getAttendanceSheetData(subject.attendanceSheet, true);
 
   return (
     <div className="container mx-auto px-4 sm:px-6 pt-6 space-y-6 max-w-7xl">

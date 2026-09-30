@@ -25,11 +25,13 @@ import { DEFAULT_ATTENDANCE_CONFIG } from "@/lib/attendance/calculator";
 /**
  * Fetch raw matrix from a given sheet with caching and public gviz fallback
  */
-export async function fetchSheetMatrix(sheetName: string): Promise<any[][]> {
+export async function fetchSheetMatrix(sheetName: string, forceFresh = false): Promise<any[][]> {
   const spreadsheetId = getSpreadsheetId();
   const cacheKey = `sheet_matrix_${spreadsheetId}_${sheetName}`;
-  const cached = getCached<any[][]>(cacheKey);
-  if (cached) return cached;
+  if (!forceFresh) {
+    const cached = getCached<any[][]>(cacheKey);
+    if (cached) return cached;
+  }
 
   const client = getGoogleSheetsClient();
 
@@ -49,12 +51,12 @@ export async function fetchSheetMatrix(sheetName: string): Promise<any[][]> {
     }
   }
 
-  // 2. Fallback: Query via public gviz endpoint
+  // 2. Fallback: Query via public gviz endpoint with cache-busting timestamp
   try {
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
       sheetName
-    )}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(3000), next: { revalidate: 30 } });
+    )}&_t=${Date.now()}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000), cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     const jsonStr = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
@@ -594,10 +596,12 @@ export async function getSubjects(): Promise<Subject[]> {
 /**
  * Get parsed Attendance Sheet data
  */
-export async function getAttendanceSheetData(sheetName: string): Promise<ParsedAttendanceSheet> {
+export async function getAttendanceSheetData(sheetName: string, forceFresh = false): Promise<ParsedAttendanceSheet> {
   const cacheKey = `parsed_attendance_${sheetName}`;
-  const cached = getCached<ParsedAttendanceSheet>(cacheKey);
-  if (cached) return cached;
+  if (!forceFresh) {
+    const cached = getCached<ParsedAttendanceSheet>(cacheKey);
+    if (cached) return cached;
+  }
 
   const cleanTitle = sheetName.replace(/^DD\s+/i, "").trim();
   const titleNorm = normalizeVietnameseNameWithoutAccent(cleanTitle).toLowerCase().replace(/\s+/g, "_");
@@ -624,9 +628,9 @@ export async function getAttendanceSheetData(sheetName: string): Promise<ParsedA
     (s) => s.trim().toUpperCase() === sheetName.trim().toUpperCase()
   );
 
-  let matrix = sheetExists ? await fetchSheetMatrix(sheetName) : [];
+  let matrix = sheetExists ? await fetchSheetMatrix(sheetName, forceFresh) : [];
   if (matrix.length === 0) {
-    const directMatrix = await fetchSheetMatrix(sheetName);
+    const directMatrix = await fetchSheetMatrix(sheetName, forceFresh);
     const isTkbDefault =
       directMatrix.length > 0 &&
       String(directMatrix[0]?.[0] || "").toUpperCase().includes("THỜI KHÓA BIỂU");
@@ -786,12 +790,13 @@ export async function getAttendanceSheetData(sheetName: string): Promise<ParsedA
             else if (u === "P") countP++;
             else if (u === "M") countM++;
           }
-          // Tỷ lệ có mặt 2/3 trở lên được tính ngày đó có tham gia học đầy đủ
-          // Trường hợp 0/3 và 1/3 đều là vắng mặt
-          recordedSessions++;
-          sess.isRecorded = true;
+          const hasAny = rounds.some((v) => !!v && v.trim().length > 0);
+          sess.isRecorded = hasAny;
           sess.rate = Math.round((sessX / 3) * 100 * 10) / 10;
           sess.status = sessX >= 2 ? "PRESENT" : "ABSENT";
+          if (hasAny) {
+            recordedSessions++;
+          }
         }
       }
 

@@ -44,6 +44,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    try {
+      const { revalidatePath } = await import("next/cache");
+      revalidatePath("/subjects", "layout");
+      revalidatePath("/students", "layout");
+      revalidatePath("/admin/attendance", "layout");
+      revalidatePath("/", "layout");
+    } catch (e) {}
+
     return NextResponse.json({
       success: true,
       message: result.message,

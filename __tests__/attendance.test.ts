@@ -258,4 +258,58 @@ describe("Attendance Calculator Rules", () => {
     expect(sess3.isFullAttendance).toBe(true);
     expect(sess3.isAbsent).toBe(false);
   });
+
+  it("supports editing student attendance results (sửa kết quả) and deleting attendance results (xóa kết quả)", async () => {
+    const { updateStudentAttendanceRounds, clearSessionAttendance } = await import(
+      "../lib/google-sheets/writer"
+    );
+    const { getAttendanceSheetData } = await import("../lib/google-sheets/reader");
+
+    const sheetName = "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT";
+    const sessionDate = "29/09/2026";
+    const studentId = "nguyen_huy_phuong";
+
+    // 1. Edit attendance: set Round 1 = X, Round 2 = X, Round 3 = P
+    const editRes = await updateStudentAttendanceRounds(
+      sheetName,
+      sessionDate,
+      studentId,
+      { round1: "X", round2: "X", round3: "P" },
+      "test_admin"
+    );
+    expect(editRes.success).toBe(true);
+
+    const sheetDataAfterEdit = await getAttendanceSheetData(sheetName, true);
+    const studentAfterEdit = sheetDataAfterEdit.records.find((r) => r.studentId === studentId);
+    expect(studentAfterEdit).toBeDefined();
+    expect(studentAfterEdit?.sessions[sessionDate]?.round1).toBe("X");
+    expect(studentAfterEdit?.sessions[sessionDate]?.round2).toBe("X");
+    expect(studentAfterEdit?.sessions[sessionDate]?.round3).toBe("P");
+    expect(studentAfterEdit?.sessions[sessionDate]?.status).toBe("PRESENT"); // 2/3 -> PRESENT
+
+    // 2. Clear attendance for single student (xóa kết quả học viên)
+    const deleteStudentRes = await clearSessionAttendance(
+      sheetName,
+      sessionDate,
+      { studentId, mode: "student" },
+      "test_admin"
+    );
+    expect(deleteStudentRes.success).toBe(true);
+
+    const sheetDataAfterDelete = await getAttendanceSheetData(sheetName, true);
+    const studentAfterDelete = sheetDataAfterDelete.records.find((r) => r.studentId === studentId);
+    expect(studentAfterDelete).toBeDefined();
+    expect(studentAfterDelete?.sessions[sessionDate]?.round1 || "").toBe("");
+    expect(studentAfterDelete?.sessions[sessionDate]?.round2 || "").toBe("");
+
+    // 3. Clear attendance for entire session (xóa kết quả cả buổi)
+    const deleteSessionRes = await clearSessionAttendance(
+      sheetName,
+      sessionDate,
+      { mode: "session" },
+      "test_admin"
+    );
+    expect(deleteSessionRes.success).toBe(true);
+  }, 15000);
 });
+

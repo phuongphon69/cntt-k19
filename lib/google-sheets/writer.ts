@@ -1,7 +1,21 @@
 import { getGoogleSheetsClient, getSpreadsheetId } from "./client";
 import { invalidateCache, updateSyncTimestamp } from "./cache";
-import { fetchSheetMatrix, getStudents, getAttendanceSheetData, getWorkbookSheetNames, getSubjects, getTkbSubjectStats } from "./reader";
-import { setSessionOverride, saveCustomSubject, saveRecordedAttendanceRound, markSubjectHasSheet } from "./sync-store";
+import {
+  fetchSheetMatrix,
+  getStudents,
+  getAttendanceSheetData,
+  getWorkbookSheetNames,
+  getSubjects,
+  getTkbSubjectStats,
+} from "./reader";
+import {
+  setSessionOverride,
+  saveCustomSubject,
+  saveRecordedAttendanceRound,
+  markSubjectHasSheet,
+  updateRecordedStudentAttendance,
+  deleteRecordedAttendance,
+} from "./sync-store";
 import { AttendanceValue, Student, Subject } from "@/types";
 import { normalizeVietnameseNameWithoutAccent } from "@/lib/vietnamese/normalize";
 
@@ -150,7 +164,7 @@ export async function writeAttendanceRound(
             dateJoinedGroup: s.dateJoinedGroup || "",
           })),
         }),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(20000),
       });
       const resData = await resp.json().catch(() => ({}));
       if (resData.sheetCreated) {
@@ -196,6 +210,244 @@ export async function writeAttendanceRound(
     sheetCreated,
     message,
   };
+}
+
+/**
+ * Update attendance for a single student across rounds (Lần 1, 2, 3) in a session
+ */
+export async function updateStudentAttendanceRounds(
+  sheetName: string,
+  sessionDate: string,
+  studentId: string,
+  rounds: { round1?: AttendanceValue; round2?: AttendanceValue; round3?: AttendanceValue },
+  adminUser = "admin"
+): Promise<{ success: boolean; message: string }> {
+  const spreadsheetId = getSpreadsheetId();
+  const client = getGoogleSheetsClient();
+
+  let parsed = await getAttendanceSheetData(sheetName, true);
+  if (!parsed) {
+    throw new Error(`Sheet ${sheetName} không thể khởi tạo dữ liệu`);
+  }
+
+  let session = parsed.sessions.find(
+    (s) => s.date === sessionDate || s.date.includes(sessionDate) || sessionDate.includes(s.date)
+  );
+
+  if (!session) {
+    session = {
+      index: parsed.sessions.length + 1,
+      date: sessionDate,
+      colStart: 5 + parsed.sessions.length * 4,
+    };
+    parsed.sessions.push(session);
+  }
+
+  const sessionIndex = session.index;
+  const colStartIdx = session.colStart;
+
+  // 1. Google Sheets API update if client connected
+  if (client) {
+    try {
+      const rawMatrix = await fetchSheetMatrix(sheetName, true);
+      let foundRow = -1;
+      for (let r = 3; r < rawMatrix.length; r++) {
+        const row = rawMatrix[r];
+        if (!row || !row[1]) continue;
+        const rowStudentId = normalizeVietnameseNameWithoutAccent(String(row[1])).replace(/\s+/g, "_");
+        if (rowStudentId === studentId) {
+          foundRow = r + 1;
+          break;
+        }
+      }
+
+      if (foundRow !== -1) {
+        const valueRanges: { range: string; values: any[][] }[] = [];
+        if (rounds.round1 !== undefined) {
+          valueRanges.push({
+            range: `'${sheetName}'!${columnIndexToLetter(colStartIdx)}${foundRow}`,
+            values: [[rounds.round1]],
+          });
+        }
+        if (rounds.round2 !== undefined) {
+          valueRanges.push({
+            range: `'${sheetName}'!${columnIndexToLetter(colStartIdx + 1)}${foundRow}`,
+            values: [[rounds.round2]],
+          });
+        }
+        if (rounds.round3 !== undefined) {
+          valueRanges.push({
+            range: `'${sheetName}'!${columnIndexToLetter(colStartIdx + 2)}${foundRow}`,
+            values: [[rounds.round3]],
+          });
+        }
+
+        if (valueRanges.length > 0) {
+          await client.spreadsheets.values.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              valueInputOption: "USER_ENTERED",
+              data: valueRanges,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[Direct edit update error for ${sheetName}]:`, err);
+    }
+  }
+
+  // 2. Apps Script Webhook call
+  const webhookUrl =
+    process.env.NODE_ENV === "test"
+      ? (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || "")
+      : (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL);
+  if (webhookUrl) {
+    try {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "editAttendance",
+          sheetName,
+          sessionDate,
+          sessionIndex,
+          studentId,
+          round1: rounds.round1,
+          round2: rounds.round2,
+          round3: rounds.round3,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+    } catch (err) {
+      console.warn(`[AppsScript editAttendance error]:`, err);
+    }
+  }
+
+  // 3. Persist update in sync store
+  updateRecordedStudentAttendance(sheetName, sessionDate, studentId, rounds);
+
+  // 4. Invalidate all caches
+  invalidateCache();
+  updateSyncTimestamp();
+
+  await logAuditEvent("EDIT_STUDENT_ATTENDANCE", sheetName, sessionDate, {
+    studentId,
+    rounds,
+    adminUser,
+  });
+
+  return {
+    success: true,
+    message: `Đã cập nhật kết quả điểm danh cho học viên ngày ${sessionDate}`,
+  };
+}
+
+/**
+ * Clear/delete attendance records for a student or entire session
+ */
+export async function clearSessionAttendance(
+  sheetName: string,
+  sessionDate: string,
+  options: { studentId?: string; mode?: "student" | "session" } = {},
+  adminUser = "admin"
+): Promise<{ success: boolean; message: string }> {
+  const spreadsheetId = getSpreadsheetId();
+  const client = getGoogleSheetsClient();
+  const mode = options.mode || (options.studentId ? "student" : "session");
+  const studentId = options.studentId;
+
+  let parsed = await getAttendanceSheetData(sheetName, true);
+  let session = parsed?.sessions.find(
+    (s) => s.date === sessionDate || s.date.includes(sessionDate) || sessionDate.includes(s.date)
+  );
+  const sessionIndex = session?.index || 1;
+  const colStartIdx = session?.colStart || (5 + (sessionIndex - 1) * 4);
+
+  // 1. Google Sheets API update if client connected
+  if (client) {
+    try {
+      const rawMatrix = await fetchSheetMatrix(sheetName, true);
+      if (mode === "session" || !studentId) {
+        // Clear columns F, G, H (or colStartIdx -> colStartIdx + 2) for all rows
+        const startLetter = columnIndexToLetter(colStartIdx);
+        const endLetter = columnIndexToLetter(colStartIdx + 2);
+        const range = `'${sheetName}'!${startLetter}4:${endLetter}${rawMatrix.length}`;
+        await client.spreadsheets.values.clear({
+          spreadsheetId,
+          range,
+        });
+      } else {
+        // Clear for single student
+        let foundRow = -1;
+        for (let r = 3; r < rawMatrix.length; r++) {
+          const row = rawMatrix[r];
+          if (!row || !row[1]) continue;
+          const rowStudentId = normalizeVietnameseNameWithoutAccent(String(row[1])).replace(/\s+/g, "_");
+          if (rowStudentId === studentId) {
+            foundRow = r + 1;
+            break;
+          }
+        }
+        if (foundRow !== -1) {
+          const startLetter = columnIndexToLetter(colStartIdx);
+          const endLetter = columnIndexToLetter(colStartIdx + 2);
+          const range = `'${sheetName}'!${startLetter}${foundRow}:${endLetter}${foundRow}`;
+          await client.spreadsheets.values.clear({
+            spreadsheetId,
+            range,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[Clear attendance API error for ${sheetName}]:`, err);
+    }
+  }
+
+  // 2. Apps Script Webhook call
+  const webhookUrl =
+    process.env.NODE_ENV === "test"
+      ? (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || "")
+      : (process.env.GOOGLE_SCRIPT_WEBHOOK_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_WEBHOOK_URL);
+  if (webhookUrl) {
+    try {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "deleteAttendance",
+          sheetName,
+          sessionDate,
+          sessionIndex,
+          studentId: mode === "student" ? studentId : undefined,
+          mode,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+    } catch (err) {
+      console.warn(`[AppsScript deleteAttendance error]:`, err);
+    }
+  }
+
+  // 3. Clear in sync store
+  deleteRecordedAttendance(sheetName, sessionDate, mode === "student" ? studentId : undefined);
+
+  // 4. Invalidate all caches
+  invalidateCache();
+  updateSyncTimestamp();
+
+  await logAuditEvent("CLEAR_ATTENDANCE", sheetName, sessionDate, {
+    mode,
+    studentId,
+    adminUser,
+  });
+
+  const message =
+    mode === "student"
+      ? `Đã xóa điểm danh của học viên trong buổi học ngày ${sessionDate}`
+      : `Đã xóa toàn bộ kết quả điểm danh của Buổi học ngày ${sessionDate}`;
+
+  return { success: true, message };
 }
 
 /**

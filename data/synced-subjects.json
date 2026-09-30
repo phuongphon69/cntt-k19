@@ -66,7 +66,8 @@
     "TEST_DD_SUBJECT_1790747453756": 25,
     "TEST_DD_SUBJECT_1790751983199": 25,
     "TEST_DD_SUBJECT_1790752033226": 25,
-    "TEST_DD_SUBJECT_1790752141331": 25
+    "TEST_DD_SUBJECT_1790752141331": 25,
+    "TEST_DD_SUBJECT_1790754192857": 25
   },
   "customSubjects": [
     {
@@ -133,35 +134,43 @@
       "updates": [
         {
           "studentId": "nguyen_huy_phuong",
-          "value": "X"
+          "value": ""
         },
         {
           "studentId": "hoang_cong_minh",
-          "value": "X"
+          "value": ""
         },
         {
           "studentId": "bui_hong_quan",
-          "value": "P"
+          "value": ""
         }
       ],
-      "recordedAt": "2026-09-30T07:09:02.945Z"
+      "recordedAt": "2026-09-30T07:47:44.749Z"
     },
     {
-      "sheetName": "DD KỸ THUẬT LẬP TRÌNH",
-      "sessionDate": "28/09/2026",
-      "roundNumber": 1,
+      "sheetName": "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT",
+      "sessionDate": "29/09/2026",
+      "roundNumber": 2,
       "updates": [
         {
           "studentId": "nguyen_huy_phuong",
-          "value": "X"
-        },
-        {
-          "studentId": "bui_hong_quan",
-          "value": "X"
+          "value": ""
         }
       ],
-      "recordedAt": "2026-09-29T07:35:16.452Z"
+      "recordedAt": "2026-09-30T07:47:46.671Z"
+    },
+    {
+      "sheetName": "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT",
+      "sessionDate": "29/09/2026",
+      "roundNumber": 3,
+      "updates": [
+        {
+          "studentId": "nguyen_huy_phuong",
+          "value": ""
+        }
+      ],
+      "recordedAt": "2026-09-30T07:47:46.671Z"
     }
   ],
-  "lastSyncedAt": "2026-09-30T07:09:02.945Z"
+  "lastSyncedAt": "2026-09-30T07:47:50.731Z"
 }

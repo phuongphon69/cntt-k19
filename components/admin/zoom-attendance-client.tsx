@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Camera,
   Upload,
@@ -38,6 +39,7 @@ interface ZoomAttendanceClientProps {
 }
 
 export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClientProps) {
+  const router = useRouter();
   const [subjectsList, setSubjectsList] = useState<Subject[]>(subjects);
   const [syncingTkb, setSyncingTkb] = useState(false);
   const [syncNotification, setSyncNotification] = useState<string | null>(null);
@@ -470,6 +472,7 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
         setCandidates([]);
         setFiles([]);
         setRawText("");
+        router.refresh();
       } else {
         alert("Lỗi ghi dữ liệu vào Google Sheets: " + (data.error || res.statusText || "Không thể ghi"));
       }
@@ -527,14 +530,28 @@ export function ZoomAttendanceClient({ subjects, students }: ZoomAttendanceClien
 
       {/* Success Notification */}
       {successMessage && (
-        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between text-emerald-800 dark:text-emerald-200 text-sm">
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-emerald-800 dark:text-emerald-200 text-sm">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
             <span className="font-semibold">{successMessage}</span>
           </div>
-          <button onClick={() => setSuccessMessage("")} className="text-xs opacity-60 hover:opacity-100">
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {currentSubject && (
+              <Link
+                href={`/subjects/${currentSubject.id}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all whitespace-nowrap cursor-pointer"
+              >
+                <span>Xem ma trận môn học ngay</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+            <button
+              onClick={() => setSuccessMessage("")}
+              className="text-xs opacity-60 hover:opacity-100 p-1 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

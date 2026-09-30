@@ -20,50 +20,73 @@ interface SyncState {
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_FILE = path.join(DATA_DIR, "synced-subjects.json");
+const TMP_STORE_FILE = path.join(process.platform === "win32" ? (process.env.TEMP || "C:\\temp") : "/tmp", "synced-subjects.json");
+
+let globalMemorySyncState: SyncState | null = null;
 
 function ensureStoreFile(): SyncState {
+  if (globalMemorySyncState) {
+    return globalMemorySyncState;
+  }
+
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+    let raw = "";
+    if (fs.existsSync(STORE_FILE)) {
+      raw = fs.readFileSync(STORE_FILE, "utf-8");
+    } else if (fs.existsSync(TMP_STORE_FILE)) {
+      raw = fs.readFileSync(TMP_STORE_FILE, "utf-8");
     }
-    if (!fs.existsSync(STORE_FILE)) {
-      const defaultState: SyncState = {
-        subjectSessionOverrides: {},
-        customSubjects: [],
-        createdSheets: [],
-        recordedAttendanceRounds: [],
+
+    if (raw) {
+      const data = JSON.parse(raw);
+      globalMemorySyncState = {
+        subjectSessionOverrides: data.subjectSessionOverrides || {},
+        customSubjects: data.customSubjects || [],
+        createdSheets: data.createdSheets || [],
+        recordedAttendanceRounds: data.recordedAttendanceRounds || [],
+        lastSyncedAt: data.lastSyncedAt,
       };
-      fs.writeFileSync(STORE_FILE, JSON.stringify(defaultState, null, 2), "utf-8");
-      return defaultState;
+      return globalMemorySyncState;
     }
-    const raw = fs.readFileSync(STORE_FILE, "utf-8");
-    const data = JSON.parse(raw);
-    return {
-      subjectSessionOverrides: data.subjectSessionOverrides || {},
-      customSubjects: data.customSubjects || [],
-      createdSheets: data.createdSheets || [],
-      recordedAttendanceRounds: data.recordedAttendanceRounds || [],
-      lastSyncedAt: data.lastSyncedAt,
-    };
-  } catch (err) {
-    console.warn("[sync-store] Failed to read store file:", err);
-    return {
+
+    const defaultState: SyncState = {
       subjectSessionOverrides: {},
       customSubjects: [],
       createdSheets: [],
       recordedAttendanceRounds: [],
     };
+    globalMemorySyncState = defaultState;
+    return defaultState;
+  } catch (err) {
+    console.warn("[sync-store] Failed to read store file, using in-memory state:", err);
+    globalMemorySyncState = {
+      subjectSessionOverrides: {},
+      customSubjects: [],
+      createdSheets: [],
+      recordedAttendanceRounds: [],
+    };
+    return globalMemorySyncState;
   }
 }
 
 function writeStoreFile(state: SyncState): void {
+  globalMemorySyncState = state;
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(STORE_FILE, JSON.stringify(state, null, 2), "utf-8");
   } catch (err) {
-    console.warn("[sync-store] Failed to write store file:", err);
+    // If process.cwd()/data is read-only (e.g. Vercel Lambda), write to /tmp
+    try {
+      const tmpDir = path.dirname(TMP_STORE_FILE);
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      }
+      fs.writeFileSync(TMP_STORE_FILE, JSON.stringify(state, null, 2), "utf-8");
+    } catch (tmpErr) {
+      console.warn("[sync-store] Could not write to disk, preserved in memory:", tmpErr);
+    }
   }
 }
 
@@ -181,5 +204,116 @@ export function isSubjectSheetCreated(sheetName: string): boolean {
 export function getCreatedSheets(): string[] {
   const state = ensureStoreFile();
   return state.createdSheets || [];
+}
+
+/**
+ * Update a student's attendance rounds in the sync store
+ */
+export function updateRecordedStudentAttendance(
+  sheetName: string,
+  sessionDate: string,
+  studentId: string,
+  rounds: { round1?: AttendanceValue; round2?: AttendanceValue; round3?: AttendanceValue }
+): void {
+  const state = ensureStoreFile();
+  const targetSheet = sheetName.trim().toUpperCase();
+
+  const roundNums: (1 | 2 | 3)[] = [1, 2, 3];
+  roundNums.forEach((rnd) => {
+    const valKey = `round${rnd}` as keyof typeof rounds;
+    if (rounds[valKey] !== undefined) {
+      const val = rounds[valKey] as AttendanceValue;
+      let roundEntry = state.recordedAttendanceRounds.find(
+        (r) =>
+          r.sheetName.trim().toUpperCase() === targetSheet &&
+          r.sessionDate === sessionDate &&
+          r.roundNumber === rnd
+      );
+
+      if (!roundEntry) {
+        roundEntry = {
+          sheetName,
+          sessionDate,
+          roundNumber: rnd,
+          updates: [],
+          recordedAt: new Date().toISOString(),
+        };
+        state.recordedAttendanceRounds.push(roundEntry);
+      }
+
+      const updIdx = roundEntry.updates.findIndex((u) => u.studentId === studentId);
+      if (val === "" || val === undefined) {
+        if (updIdx !== -1) roundEntry.updates.splice(updIdx, 1);
+      } else {
+        if (updIdx !== -1) {
+          roundEntry.updates[updIdx].value = val;
+        } else {
+          roundEntry.updates.push({ studentId, value: val });
+        }
+      }
+    }
+  });
+
+  state.lastSyncedAt = new Date().toISOString();
+  writeStoreFile(state);
+}
+
+/**
+ * Delete or clear attendance in sync store for a student or whole session
+ */
+export function deleteRecordedAttendance(
+  sheetName: string,
+  sessionDate: string,
+  studentId?: string
+): void {
+  const state = ensureStoreFile();
+  const targetSheet = sheetName.trim().toUpperCase();
+  const roundNums: (1 | 2 | 3)[] = [1, 2, 3];
+
+  if (studentId) {
+    // Record explicit empty value for this student in each round to override any stale sheet cache
+    roundNums.forEach((rnd) => {
+      let roundEntry = state.recordedAttendanceRounds.find(
+        (r) =>
+          r.sheetName.trim().toUpperCase() === targetSheet &&
+          r.sessionDate === sessionDate &&
+          r.roundNumber === rnd
+      );
+      if (!roundEntry) {
+        roundEntry = {
+          sheetName,
+          sessionDate,
+          roundNumber: rnd,
+          updates: [],
+          recordedAt: new Date().toISOString(),
+        };
+        state.recordedAttendanceRounds.push(roundEntry);
+      }
+      const updIdx = roundEntry.updates.findIndex((u) => u.studentId === studentId);
+      if (updIdx !== -1) {
+        roundEntry.updates[updIdx].value = "";
+      } else {
+        roundEntry.updates.push({ studentId, value: "" });
+      }
+    });
+  } else {
+    // Session mode: set all rounds to empty
+    roundNums.forEach((rnd) => {
+      let roundEntry = state.recordedAttendanceRounds.find(
+        (r) =>
+          r.sheetName.trim().toUpperCase() === targetSheet &&
+          r.sessionDate === sessionDate &&
+          r.roundNumber === rnd
+      );
+      if (roundEntry) {
+        roundEntry.updates.forEach((u) => {
+          u.value = "";
+        });
+      }
+    });
+  }
+
+  state.lastSyncedAt = new Date().toISOString();
+  writeStoreFile(state);
 }
 

@@ -576,12 +576,16 @@ function doPost(e) {
       var roundNumber = Number(data.roundNumber || 1);
       var sessionIndex = Number(data.sessionIndex || 1);
       var targetCol = -1;
-      for (var c = 5; c < (matrix[0] ? matrix[0].length : 0); c++) {
-        var cellDate = String(matrix[0][c] || "").trim();
-        if (cellDate && sessionDate && (cellDate === sessionDate || cellDate.indexOf(sessionDate) !== -1 || sessionDate.indexOf(cellDate) !== -1)) {
-          targetCol = c + roundNumber;
-          break;
+      // Search in row 1 or row 2 for session date
+      for (var rIdx = 0; rIdx <= 1 && rIdx < matrix.length; rIdx++) {
+        for (var c = 5; c < matrix[rIdx].length; c++) {
+          var cellDate = String(matrix[rIdx][c] || "").trim();
+          if (cellDate && sessionDate && (cellDate === sessionDate || cellDate.indexOf(sessionDate) !== -1 || sessionDate.indexOf(cellDate) !== -1)) {
+            targetCol = c + roundNumber;
+            break;
+          }
         }
+        if (targetCol !== -1) break;
       }
       if (targetCol === -1) {
         targetCol = 6 + (sessionIndex - 1) * 4 + (roundNumber - 1);
@@ -592,7 +596,7 @@ function doPost(e) {
       for (var r = 3; r < matrix.length; r++) {
         var rawName = String(matrix[r][1] || "").trim();
         if (!rawName) continue;
-        var norm = rawName.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+        var norm = rawName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
         for (var sId in updateMap) {
           if (norm.indexOf(sId) !== -1 || sId.indexOf(norm) !== -1) {
             sheet.getRange(r + 1, targetCol).setValue(updateMap[sId]);
@@ -607,6 +611,71 @@ function doPost(e) {
         sheetName: data.sheetName,
         targetCol: targetCol,
         totalStudents: sheet.getLastRow() - 3
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2b. CHỈNH SỬA KẾT QUẢ ĐIỂM DANH (SỬA LẦN 1, 2, 3 CỦA HỌC VIÊN)
+    if (data.action === "editAttendance") {
+      var sheet = ss.getSheetByName(data.sheetName);
+      if (!sheet) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Không tìm thấy sheet " + data.sheetName })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var matrix = sheet.getDataRange().getValues();
+      var sessionIndex = Number(data.sessionIndex || 1);
+      var colStart = 6 + (sessionIndex - 1) * 4;
+      var studentId = String(data.studentId || "").trim();
+      var r1 = data.round1 !== undefined ? String(data.round1) : null;
+      var r2 = data.round2 !== undefined ? String(data.round2) : null;
+      var r3 = data.round3 !== undefined ? String(data.round3) : null;
+
+      for (var r = 3; r < matrix.length; r++) {
+        var rawName = String(matrix[r][1] || "").trim();
+        if (!rawName) continue;
+        var norm = rawName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+        if (norm.indexOf(studentId) !== -1 || studentId.indexOf(norm) !== -1) {
+          if (r1 !== null) sheet.getRange(r + 1, colStart).setValue(r1);
+          if (r2 !== null) sheet.getRange(r + 1, colStart + 1).setValue(r2);
+          if (r3 !== null) sheet.getRange(r + 1, colStart + 2).setValue(r3);
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        sheetName: data.sheetName,
+        studentId: studentId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2c. XÓA KẾT QUẢ ĐIỂM DANH (THEO HỌC VIÊN HOẶC CẢ BUỔI HỌC)
+    if (data.action === "deleteAttendance") {
+      var sheet = ss.getSheetByName(data.sheetName);
+      if (!sheet) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Không tìm thấy sheet " + data.sheetName })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var matrix = sheet.getDataRange().getValues();
+      var sessionIndex = Number(data.sessionIndex || 1);
+      var colStart = 6 + (sessionIndex - 1) * 4;
+      var studentId = String(data.studentId || "").trim();
+      var mode = data.mode || (studentId ? "student" : "session");
+
+      if (mode === "session" || !studentId) {
+        var numRows = Math.max(1, matrix.length - 3);
+        sheet.getRange(4, colStart, numRows, 3).setValue("");
+      } else {
+        for (var r = 3; r < matrix.length; r++) {
+          var rawName = String(matrix[r][1] || "").trim();
+          if (!rawName) continue;
+          var norm = rawName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+          if (norm.indexOf(studentId) !== -1 || studentId.indexOf(norm) !== -1) {
+            sheet.getRange(r + 1, colStart, 1, 3).setValue("");
+            break;
+          }
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        sheetName: data.sheetName,
+        mode: mode
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
