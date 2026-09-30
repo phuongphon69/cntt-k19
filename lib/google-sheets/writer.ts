@@ -120,6 +120,34 @@ export async function writeAttendanceRound(
     updatedCount = updates.length;
   }
 
+  // 4b. If Google Apps Script Webhook is configured, write directly to Google Sheets
+  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL;
+  if (webhookUrl && webhookUrl.trim().length > 0) {
+    try {
+      const resp = await fetch(webhookUrl.trim(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "writeAttendance",
+          sheetName,
+          sessionDate,
+          roundNumber,
+          updates,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const resData = await resp.json().catch(() => ({}));
+      if (resData.sheetCreated) {
+        sheetCreated = true;
+      }
+      if (typeof resData.updatedCount === "number" && resData.updatedCount > 0) {
+        updatedCount = resData.updatedCount;
+      }
+    } catch (err) {
+      console.warn(`[AppsScript Webhook write error for ${sheetName}]:`, err);
+    }
+  }
+
   // 5. Always persist recorded round in sync-store to ensure data integrity and immediate stats update
   saveRecordedAttendanceRound({
     sheetName,
@@ -252,6 +280,25 @@ export async function createNewSubjectSheet(
         ],
       },
     });
+  }
+
+  // If Google Apps Script Webhook is configured, also create sheet via Webhook
+  const webhookUrl = process.env.GOOGLE_SCRIPT_WEBHOOK_URL;
+  if (webhookUrl && webhookUrl.trim().length > 0) {
+    try {
+      await fetch(webhookUrl.trim(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "createSheet",
+          sheetName: newSheetName,
+          subjectName,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (err) {
+      console.warn("[AppsScript Webhook createSheet error]:", err);
+    }
   }
 
   invalidateCache();
