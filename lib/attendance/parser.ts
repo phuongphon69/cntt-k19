@@ -131,6 +131,7 @@ export function parseAttendanceSheet(
 
   let colIdx = 5; // Column F
   let sessionIndex = 1;
+  let summaryColStart = 999;
 
   while (colIdx < dateRow.length) {
     const dateCell = String(dateRow[colIdx] || "").trim();
@@ -141,9 +142,12 @@ export function parseAttendanceSheet(
       dateCell.toUpperCase().includes("TỔNG") ||
       dateCell.toUpperCase().includes("SĨ SỐ") ||
       dateCell.toUpperCase().includes("GHI CHÚ") ||
+      dateCell.toUpperCase().includes("CHUYÊN CẦN") ||
       labelCell.includes("TỔNG") ||
-      labelCell.includes("SĨ SỐ")
+      labelCell.includes("SĨ SỐ") ||
+      labelCell.includes("CHUYÊN CẦN")
     ) {
+      summaryColStart = colIdx;
       break;
     }
 
@@ -172,15 +176,29 @@ export function parseAttendanceSheet(
       break;
     }
 
-    // Determine session date:
-    // 1. If TKB has this session's date, use TKB date!
-    // 2. Else if dateCell matches a real date pattern, use it!
+    // Determine session date normalized as DD/MM/YYYY:
+    // 1. If dateCell has a valid date, prioritize it!
+    // 2. Else if TKB has this session's date, use TKB date!
     // 3. Else fallback to "Buổi X"
     let finalDate = "";
-    if (hasTkbDate) {
-      finalDate = tkbDates![sessionIndex - 1];
-    } else if (hasCellDate) {
-      finalDate = dateCell;
+    if (hasCellDate) {
+      const parsedD = parseVNDate(dateCell);
+      if (parsedD) {
+        const dd = String(parsedD.getDate()).padStart(2, "0");
+        const mm = String(parsedD.getMonth() + 1).padStart(2, "0");
+        finalDate = `${dd}/${mm}/${parsedD.getFullYear()}`;
+      } else {
+        finalDate = dateCell;
+      }
+    } else if (hasTkbDate) {
+      const parsedD = parseVNDate(tkbDates![sessionIndex - 1]);
+      if (parsedD) {
+        const dd = String(parsedD.getDate()).padStart(2, "0");
+        const mm = String(parsedD.getMonth() + 1).padStart(2, "0");
+        finalDate = `${dd}/${mm}/${parsedD.getFullYear()}`;
+      } else {
+        finalDate = tkbDates![sessionIndex - 1];
+      }
     } else {
       finalDate = `Buổi ${sessionIndex}`;
     }
@@ -198,13 +216,26 @@ export function parseAttendanceSheet(
   // Ensure all scheduled dates from TKB are present in sessionList
   if (tkbDates && tkbDates.length > 0) {
     for (let i = 0; i < tkbDates.length; i++) {
-      const targetDate = tkbDates[i];
-      const existing = sessionList.find((s) => s.date === targetDate);
+      const rawTarget = tkbDates[i];
+      const parsedD = parseVNDate(rawTarget);
+      const targetDate = parsedD
+        ? `${String(parsedD.getDate()).padStart(2, "0")}/${String(parsedD.getMonth() + 1).padStart(2, "0")}/${parsedD.getFullYear()}`
+        : rawTarget;
+
+      const existing = sessionList.find((s) => {
+        const sParsed = parseVNDate(s.date);
+        const sNorm = sParsed
+          ? `${String(sParsed.getDate()).padStart(2, "0")}/${String(sParsed.getMonth() + 1).padStart(2, "0")}/${sParsed.getFullYear()}`
+          : s.date;
+        return sNorm === targetDate;
+      });
+
       if (!existing) {
+        const defaultColStart = 5 + i * 4;
         sessionList.push({
           index: i + 1,
           date: targetDate,
-          colStart: 5 + i * 4,
+          colStart: defaultColStart < summaryColStart ? defaultColStart : -1,
         });
       }
     }
@@ -250,9 +281,16 @@ export function parseAttendanceSheet(
 
     for (const sess of sessionList) {
       const c = sess.colStart;
-      const r1 = String(row[c] || "").trim();
-      const r2 = String(row[c + 1] || "").trim();
-      const r3 = String(row[c + 2] || "").trim();
+      let r1 = "";
+      let r2 = "";
+      let r3 = "";
+
+      // Only read cell values if within valid data columns (not summary columns!)
+      if (c >= 5 && c < summaryColStart) {
+        r1 = String(row[c] || "").trim();
+        r2 = String(row[c + 1] || "").trim();
+        r3 = String(row[c + 2] || "").trim();
+      }
 
       const rounds = [r1, r2, r3];
       const isRecorded = rounds.some((x) => x !== "");
@@ -298,9 +336,18 @@ export function parseAttendanceSheet(
           round2: r2,
           round3: r3,
           rate,
-          isRecorded: true,
-          status,
+          isRecorded,
+          status: isRecorded ? status : "UNRECORDED",
         };
+        const sParsed = parseVNDate(sess.date);
+        if (sParsed) {
+          const dd = String(sParsed.getDate()).padStart(2, "0");
+          const mm = String(sParsed.getMonth() + 1).padStart(2, "0");
+          const paddedKey = `${dd}/${mm}/${sParsed.getFullYear()}`;
+          if (paddedKey !== sess.date) {
+            sessionsObj[paddedKey] = sessionsObj[sess.date];
+          }
+        }
       }
 
       sessionListForCalc.push({

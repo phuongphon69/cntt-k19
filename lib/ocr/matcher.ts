@@ -19,8 +19,8 @@ export function matchZoomParticipants(
   students: PublicStudent[],
   options?: MatchOptions
 ): OcrResultSummary {
-  const highThreshold = options?.highThreshold ?? 85;
-  const reviewThreshold = options?.reviewThreshold ?? 65;
+  const highThreshold = options?.highThreshold ?? 80;
+  const reviewThreshold = options?.reviewThreshold ?? 60;
   const aliases = options?.aliases || [];
   const currentAttendance = options?.currentAttendanceValues || {};
 

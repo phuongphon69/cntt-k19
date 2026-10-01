@@ -515,29 +515,32 @@ function doPost(e) {
       return roster;
     }
 
-    // Hàm mở rộng và nạp đầy đủ 43 sinh viên vào sheet môn học
+    // Hàm mở rộng và nạp đầy đủ 43 sinh viên vào sheet môn học (Hàng 5 trở đi theo chuẩn MẪU)
     function ensureFullRosterInSheet(targetSheet) {
       var roster = getFullClassRoster();
       if (!roster || roster.length === 0) return;
-      var neededRows = 3 + roster.length;
+      var neededRows = 4 + roster.length;
       if (targetSheet.getMaxRows() < neededRows) {
         targetSheet.insertRowsAfter(targetSheet.getMaxRows(), neededRows - targetSheet.getMaxRows());
       }
       var rowsToWrite = roster.map(function(s, idx) {
         return [idx + 1, s.fullName, s.dateOfBirth || "", s.studySystem || "", s.dateJoinedGroup || ""];
       });
-      targetSheet.getRange(4, 1, rowsToWrite.length, 5).setValues(rowsToWrite);
-      targetSheet.getRange(4, 1, rowsToWrite.length, 1).setHorizontalAlignment("center");
-      targetSheet.getRange(4, 2, rowsToWrite.length, 1).setHorizontalAlignment("left");
-      targetSheet.getRange(4, 3, rowsToWrite.length, 3).setHorizontalAlignment("center");
+      targetSheet.getRange(5, 1, rowsToWrite.length, 5).setValues(rowsToWrite);
+      targetSheet.getRange(5, 1, rowsToWrite.length, 1).setHorizontalAlignment("center");
+      targetSheet.getRange(5, 2, rowsToWrite.length, 1).setHorizontalAlignment("left");
+      targetSheet.getRange(5, 3, rowsToWrite.length, 3).setHorizontalAlignment("center");
     }
 
-    // 1. TỰ ĐỘNG TẠO SHEET MÔN MỚI
+    // 1. TỰ ĐỘNG TẠO HOẶC ĐỒNG BỘ SHEET MÔN MỚI TỪ SHEET MẪU
     if (data.action === "createSheet" || (data.sheetName && !ss.getSheetByName(data.sheetName))) {
       var sheet = ss.getSheetByName(data.sheetName);
+      if (sheet && data.overwrite === true) {
+        try { ss.deleteSheet(sheet); sheet = null; } catch (e) {}
+      }
       var sheetCreated = false;
       if (!sheet) {
-        var template = ss.getSheetByName("MẪU MÔN HỌC");
+        var template = ss.getSheetByName("MẪU") || ss.getSheetByName("MẪU MÔN HỌC");
         sheet = template ? template.copyTo(ss).setName(data.sheetName) : ss.insertSheet(data.sheetName);
         sheetCreated = true;
       }
@@ -546,9 +549,18 @@ function doPost(e) {
       try { ss.moveActiveSheet(4); } catch (e) {}
 
       var subjName = data.subjectName || data.sheetName.replace(/^DD\\s+/i, "");
-      sheet.getRange(1, 2).setValue(subjName);
-      if (data.teacherName) sheet.getRange(1, 4).setValue(data.teacherName);
-      if (data.totalSessions) sheet.getRange(1, 6).setValue(data.totalSessions);
+      try { sheet.getRange(1, 1).setValue("BẢNG ĐIỂM DANH MÔN " + subjName.toUpperCase() + " - LỚP CNTT K19"); } catch (e) {}
+      try { sheet.getRange(2, 2).setValue(subjName); } catch (e) {}
+      if (data.teacherName) { try { sheet.getRange(2, 4).setValue(data.teacherName); } catch (e) {} }
+      if (data.totalSessions) { try { sheet.getRange(2, 6).setValue(data.totalSessions); } catch (e) {} }
+
+      // Điền danh sách ngày học lên Hàng 3 (Cột F = 6, J = 10, N = 14...)
+      if (data.sessionDates && Array.isArray(data.sessionDates) && data.sessionDates.length > 0) {
+        for (var i = 0; i < data.sessionDates.length; i++) {
+          try { sheet.getRange(3, 6 + i * 4).setValue(data.sessionDates[i]); } catch (e) {}
+        }
+      }
+
       ensureFullRosterInSheet(sheet);
 
       if (data.action === "createSheet") {
@@ -556,7 +568,7 @@ function doPost(e) {
           success: true,
           sheetCreated: sheetCreated,
           sheetName: data.sheetName,
-          totalStudents: sheet.getLastRow() - 3
+          totalStudents: Math.max(0, sheet.getLastRow() - 4)
         })).setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -565,35 +577,47 @@ function doPost(e) {
     if (data.action === "writeAttendance") {
       var sheet = ss.getSheetByName(data.sheetName);
       if (!sheet) {
-        return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Không tìm thấy sheet " + data.sheetName })).setMimeType(ContentService.MimeType.JSON);
+        var template = ss.getSheetByName("MẪU") || ss.getSheetByName("MẪU MÔN HỌC");
+        sheet = template ? template.copyTo(ss).setName(data.sheetName) : ss.insertSheet(data.sheetName);
+        var subjName = data.sheetName.replace(/^DD\\s+/i, "");
+        try { sheet.getRange(1, 1).setValue("BẢNG ĐIỂM DANH MÔN " + subjName.toUpperCase() + " - LỚP CNTT K19"); } catch (e) {}
+        try { sheet.getRange(2, 2).setValue(subjName); } catch (e) {}
+        ensureFullRosterInSheet(sheet);
       }
-      // Luôn đảm bảo đủ 43 học viên và đưa sheet lên tab hiển thị nổi bật
       ss.setActiveSheet(sheet);
       try { ss.moveActiveSheet(4); } catch (e) {}
-      ensureFullRosterInSheet(sheet);
       var matrix = sheet.getDataRange().getValues();
       var sessionDate = String(data.sessionDate || "").trim();
       var roundNumber = Number(data.roundNumber || 1);
       var sessionIndex = Number(data.sessionIndex || 1);
       var targetCol = -1;
-      // Search in row 1 or row 2 for session date
-      for (var rIdx = 0; rIdx <= 1 && rIdx < matrix.length; rIdx++) {
+
+      // Tìm cột ngày học trong các hàng tiêu đề (Hàng 2 hoặc Hàng 3)
+      for (var rIdx = 0; rIdx < Math.min(4, matrix.length); rIdx++) {
         for (var c = 5; c < matrix[rIdx].length; c++) {
           var cellDate = String(matrix[rIdx][c] || "").trim();
-          if (cellDate && sessionDate && (cellDate === sessionDate || cellDate.indexOf(sessionDate) !== -1 || sessionDate.indexOf(cellDate) !== -1)) {
-            targetCol = c + roundNumber;
-            break;
+          if (cellDate && sessionDate) {
+            var cClean = cellDate.replace(/[^0-9]/g, "");
+            var sClean = sessionDate.replace(/[^0-9]/g, "");
+            if (cClean && sClean && (cClean === sClean || cClean.indexOf(sClean) !== -1 || sClean.indexOf(cClean) !== -1)) {
+              targetCol = (c + 1) + (roundNumber - 1);
+              break;
+            }
           }
         }
         if (targetCol !== -1) break;
       }
       if (targetCol === -1) {
         targetCol = 6 + (sessionIndex - 1) * 4 + (roundNumber - 1);
+        if (sessionDate) {
+          try { sheet.getRange(3, 6 + (sessionIndex - 1) * 4).setValue(sessionDate); } catch (e) {}
+        }
       }
       var updateMap = {};
       (data.updates || []).forEach(function(u) { updateMap[u.studentId] = u.value; });
       var updatedCount = 0;
-      for (var r = 3; r < matrix.length; r++) {
+      // Sinh viên bắt đầu từ hàng index 4 (tức Hàng 5 trong Google Sheet)
+      for (var r = 4; r < matrix.length; r++) {
         var rawName = String(matrix[r][1] || "").trim();
         if (!rawName) continue;
         var norm = rawName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
@@ -610,7 +634,7 @@ function doPost(e) {
         updatedCount: updatedCount,
         sheetName: data.sheetName,
         targetCol: targetCol,
-        totalStudents: sheet.getLastRow() - 3
+        totalStudents: Math.max(0, sheet.getLastRow() - 4)
       })).setMimeType(ContentService.MimeType.JSON);
     }
 

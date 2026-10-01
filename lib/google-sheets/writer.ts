@@ -465,7 +465,8 @@ export async function createNewSubjectSheet(
   subjectName: string,
   teacherName = "",
   totalSessions = 12,
-  adminUser = "admin"
+  adminUser = "admin",
+  options: { overwrite?: boolean; sessionDates?: string[] } = {}
 ): Promise<{ success: boolean; sheetName: string }> {
   const spreadsheetId = getSpreadsheetId();
   const client = getGoogleSheetsClient();
@@ -474,17 +475,41 @@ export async function createNewSubjectSheet(
   const activeStudents = await getStudents();
 
   if (client) {
-    // 1. Check if sheet exists or duplicate template
+    // 1. Check if sheet exists or duplicate template "MẪU"
     const meta = await client.spreadsheets.get({ spreadsheetId });
-    const templateSheet = meta.data.sheets?.find(
-      (s) => s.properties?.title?.trim().toUpperCase() === "MẪU MÔN HỌC"
+    const existingTargetSheet = meta.data.sheets?.find(
+      (s) => s.properties?.title?.trim().toUpperCase() === newSheetName.toUpperCase()
     );
+
+    if (existingTargetSheet && options.overwrite && typeof existingTargetSheet.properties?.sheetId === "number") {
+      try {
+        await client.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                deleteSheet: {
+                  sheetId: existingTargetSheet.properties.sheetId,
+                },
+              },
+            ],
+          },
+        });
+      } catch (e) {
+        console.warn("[Delete old sheet for overwrite]:", e);
+      }
+    }
+
+    const templateSheet = meta.data.sheets?.find((s) => {
+      const t = s.properties?.title?.trim().toUpperCase();
+      return t === "MẪU" || t === "MẪU MÔN HỌC";
+    });
 
     let newSheetId: number | undefined;
 
     if (templateSheet && typeof templateSheet.properties?.sheetId === "number") {
       const templateSheetId: number = templateSheet.properties.sheetId;
-      // Duplicate template
+      // Duplicate template "MẪU"
       const duplicateRes = await client.spreadsheets.sheets.copyTo({
         spreadsheetId,
         sheetId: templateSheetId,
@@ -514,7 +539,7 @@ export async function createNewSubjectSheet(
         });
       }
     } else {
-      // Add blank sheet
+      // Add blank sheet as fallback
       await client.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
@@ -531,7 +556,7 @@ export async function createNewSubjectSheet(
       });
     }
 
-    // Populate metadata & students into the new sheet
+    // Populate metadata & students into the new sheet following template "MẪU"
     const studentRows = activeStudents.map((s, idx) => [
       idx + 1,
       s.fullName,
@@ -540,20 +565,36 @@ export async function createNewSubjectSheet(
       s.dateJoinedGroup || "",
     ]);
 
+    const updateRanges: { range: string; values: any[][] }[] = [
+      {
+        range: `'${newSheetName}'!A1`,
+        values: [[`BẢNG ĐIỂM DANH MÔN ${subjectName.toUpperCase()} - LỚP CNTT K19`]],
+      },
+      {
+        range: `'${newSheetName}'!B2:F2`,
+        values: [[subjectName, "Giảng viên", teacherName, "Số buổi", totalSessions]],
+      },
+      {
+        range: `'${newSheetName}'!A5:E${4 + studentRows.length}`,
+        values: studentRows,
+      },
+    ];
+
+    if (options.sessionDates && options.sessionDates.length > 0) {
+      for (let i = 0; i < options.sessionDates.length; i++) {
+        const colLetter = columnIndexToLetter(5 + i * 4);
+        updateRanges.push({
+          range: `'${newSheetName}'!${colLetter}3`,
+          values: [[options.sessionDates[i]]],
+        });
+      }
+    }
+
     await client.spreadsheets.values.batchUpdate({
       spreadsheetId,
       requestBody: {
         valueInputOption: "USER_ENTERED",
-        data: [
-          {
-            range: `'${newSheetName}'!B1:F1`,
-            values: [[subjectName, "Giảng viên", teacherName, "Số buổi", totalSessions]],
-          },
-          {
-            range: `'${newSheetName}'!A4:E${3 + studentRows.length}`,
-            values: studentRows,
-          },
-        ],
+        data: updateRanges,
       },
     });
   }
@@ -574,6 +615,8 @@ export async function createNewSubjectSheet(
           subjectName,
           teacherName,
           totalSessions,
+          overwrite: options.overwrite === true,
+          sessionDates: options.sessionDates,
           students: activeStudents.map((s, idx) => ({
             stt: idx + 1,
             fullName: s.fullName,

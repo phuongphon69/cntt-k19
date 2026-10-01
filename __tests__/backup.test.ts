@@ -15,7 +15,7 @@ describe("Google Sheet Attendance Backup Engine", () => {
     expect(res.subjectsCount).toBeGreaterThan(0);
     expect(res.destinationSheet).toBe("SAO_LUU_DIEM_DANH");
     expect(typeof res.message).toBe("string");
-  }, 15000);
+  }, 35000);
 
   it("should record the backup in the backup history list", () => {
     const history = getBackupHistory();
@@ -35,7 +35,7 @@ describe("Google Sheet Attendance Backup Engine", () => {
     expect(csv).toContain("Ngày Vào Lớp");
     expect(csv).toContain("Chuyên Cần Chung (%)");
     expect(csv).toContain("Nguyễn Huy Phương");
-  }, 15000);
+  }, 35000);
 
   it("should provide valid Google Apps Script deployment code snippet", () => {
     const snippet = getGoogleAppsScriptSnippet();

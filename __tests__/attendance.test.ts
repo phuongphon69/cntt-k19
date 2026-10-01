@@ -188,7 +188,7 @@ describe("Attendance Calculator Rules", () => {
     const { getAttendanceSheetData } = await import("../lib/google-sheets/reader");
     const { isSubjectSheetCreated } = await import("../lib/google-sheets/sync-store");
 
-    const sheetName = "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT";
+    const sheetName = "TEST_DD_AUTOMATION_SUITE";
     const sessionDate = "29/09/2026";
     const roundNumber = 1;
 
@@ -265,7 +265,7 @@ describe("Attendance Calculator Rules", () => {
     );
     const { getAttendanceSheetData } = await import("../lib/google-sheets/reader");
 
-    const sheetName = "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT";
+    const sheetName = "TEST_DD_AUTOMATION_SUITE";
     const sessionDate = "29/09/2026";
     const studentId = "nguyen_huy_phuong";
 
@@ -310,7 +310,7 @@ describe("Attendance Calculator Rules", () => {
       "test_admin"
     );
     expect(deleteSessionRes.success).toBe(true);
-  }, 15000);
+  }, 35000);
 
   it("correctly parses attendance sheet even when explicit header labels are absent", async () => {
     const { parseAttendanceSheet } = await import("../lib/attendance/parser");

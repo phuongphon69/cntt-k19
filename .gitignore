@@ -36,3 +36,4 @@ next-env.d.ts
 
 # local backup snapshots
 data/backups/*.json
+scratch/

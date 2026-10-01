@@ -36,13 +36,18 @@ export function parseZoomDisplayName(rawLine: string): ParsedZoomName {
   text = text.replace(/\.{2,}/g, " ");
   text = text.replace(/[©®™•ØÏöÖòỏỎ*#_+~^!@$%&=:;<>\"'\\\/|\[\]\(\)\{\}\-.,?]/g, " ");
 
-  // 3. Remove common Zoom labels / tags / noise tokens
+  // 2b. Correct typical OCR character confusions within words (0 -> o, 1 -> l)
+  text = text.replace(/([a-zA-ZÀ-ỹ])0([a-zA-ZÀ-ỹ])/g, "$1o$2");
+  text = text.replace(/([a-zA-ZÀ-ỹ])1([a-zA-ZÀ-ỹ])/g, "$1l$2");
+
+  // 3. Remove common Zoom labels / tags / device names / noise tokens
   const noisePatterns = [
-    /\b(tôi|me|host|co-host|chủ trì|đồng chủ trì|guest|you)\b/gi,
-    /\b(k\s*19\w*|cntt\w*|cnt|cđ|cd|lt|cq|khoa|lớp|lop)\b/gi,
+    /\b(tôi|me|host|co-host|chủ trì|đồng chủ trì|guest|you|chủ tọa|thầy|cô)\b/gi,
+    /\b(k\s*19\w*|cntt\w*|cnt|cđ|cd|lt|cq|vb2|khoa|lớp|lop)\b/gi,
+    /\b(iphone\w*|samsung\w*|galaxy\w*|redmi\w*|xiaomi\w*|oppo\w*|ipad\w*|laptop\w*|pc|desktop)\b/gi,
     /\b(ch\s*\d+|z\s*\d+|zf|z4|z1|cam|mic)\b/gi,
     /\bk\d+\w*\b/gi,
-    /\b(sn|ns)\b/gi,
+    /\b(sn|ns|sinh\s*năm|năm\s*sinh)\b/gi,
   ];
 
   for (const pat of noisePatterns) {

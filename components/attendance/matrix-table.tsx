@@ -339,7 +339,17 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
 
                     {/* Session Cells */}
                     {attendanceData.sessions.map((sess) => {
-                      const sessionRecord = rec.sessions[sess.date];
+                      const cleanTarget = (sess.date || "").replace(/[^0-9]/g, "");
+                      let sessionRecord = rec.sessions[sess.date];
+                      if (!sessionRecord && rec.sessions) {
+                        for (const [key, val] of Object.entries(rec.sessions)) {
+                          if (key.replace(/[^0-9]/g, "") === cleanTarget) {
+                            sessionRecord = val;
+                            break;
+                          }
+                        }
+                      }
+
                       const isNotApplicable =
                         sessionRecord?.status === "NOT_APPLICABLE" || (!rec.isApplicable && !sessionRecord?.isRecorded);
 
@@ -361,15 +371,22 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
                         );
                       }
 
-                      const isUnrecorded = !sessionRecord?.isRecorded || sessionRecord.rate === 0;
+                      const rounds = [sessionRecord?.round1, sessionRecord?.round2, sessionRecord?.round3];
+                      const countX = rounds.filter((x) => (x || "").toUpperCase() === "X").length;
+                      const hasMarks = rounds.some((x) => x && String(x).trim().length > 0);
+                      const isUnrecorded = !sessionRecord?.isRecorded && !hasMarks;
+
                       const countText = isUnrecorded
                         ? "--"
-                        : sessionRecord.rate >= 100
-                        ? "3/3"
-                        : sessionRecord.rate >= 66
-                        ? "2/3"
-                        : "1/3";
-                      const rate = sessionRecord?.rate;
+                        : countX > 0
+                        ? `${countX}/3`
+                        : rounds.some((x) => (x || "").toUpperCase() === "P")
+                        ? "P"
+                        : rounds.some((x) => (x || "").toUpperCase() === "M")
+                        ? "M"
+                        : "0/3";
+
+                      const rate = sessionRecord?.rate ?? (countX > 0 ? Math.round((countX / 3) * 100 * 10) / 10 : 0);
 
                       return (
                         <td
@@ -502,6 +519,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
           </div>
         </div>
       )}
+
     </div>
   );
 }

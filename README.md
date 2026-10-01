@@ -101,7 +101,7 @@ Truy cập ứng dụng tại: `http://localhost:3000`
 2. Đăng nhập [Vercel](https://vercel.com/) và bấm **Add New Project**.
 3. Chọn repository chứa mã nguồn dự án.
 4. Trong phần **Environment Variables**, cấu hình đầy đủ các biến:
-   - `GOOGLE_SHEET_ID`
+   - `GOOvGLE_SHEET_ID`
    - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
    - `GOOGLE_PRIVATE_KEY` (chú ý giữ đúng ký tự `\n` hoặc dán toàn bộ key)
    - `AUTH_SECRET`
@@ -168,3 +168,4 @@ Toàn bộ 31 unit tests tự động kiểm thử:
 - Bóc tách chuỗi tên Zoom OCR, loại bỏ nhãn và đối chiếu danh sách sinh viên.
 - Cơ chế sao lưu kết quả điểm danh ra Google Sheet và file CSV UTF-8 BOM.
 - Quản lý và bảo vệ thông tin cá nhân của sinh viên.
+ 

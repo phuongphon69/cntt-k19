@@ -29,30 +29,22 @@ export class GeminiOcrProvider implements OcrProvider {
   async recognize(imageBuffer: Buffer, mimeType = "image/jpeg"): Promise<OcrResult> {
     const base64Image = imageBuffer.toString("base64");
 
-    const prompt = `Bạn là chuyên gia bóc tách danh sách người tham gia phòng học Zoom tiếng Việt.
-Nhiệm vụ: Trích xuất CHỈ HỌ VÀ TÊN của từng học viên / sinh viên trong danh sách người tham gia Zoom từ ảnh.
+    const prompt = `Bạn là chuyên gia nhận diện danh sách người tham gia phòng học Zoom tiếng Việt.
+Nhiệm vụ: Trích xuất CHÍNH XÁC HỌ VÀ TÊN của từng học viên / sinh viên trong danh sách người tham gia Zoom từ ảnh.
 
 QUY TẮC BẮT BUỘC:
-1. CHỈ trích xuất đúng phần HỌ VÀ TÊN người tiếng Việt (Ví dụ: "Phạm Đình Diện", "Phùng Bá Hoan", "Trần Ngọc Bảo", "Trần Thế Anh", "Trịnh Đức Thịnh", "Võ Trọng Tường", "Đào Xuân Quế").
-2. TUYỆT ĐỐI LOẠI BỎ các thành phần gây nhiễu sau:
-   - Chữ viết tắt của ảnh đại diện/avatar ở đầu dòng (như "Po", "Ps", "Mà", "Dạ", "Lại", "BH", "ĐQ", "Ne", "We es", "Lê", v.v.)
-   - Số thứ tự hoặc ký hiệu đầu dòng (như "1", "(1", "01.", v.v.)
-   - Ngày tháng năm sinh (như "31/01/1985", "8/3/1991", "sn11/4/1981", "14.07.1986", v.v.)
+1. CHỈ trích xuất đúng phần HỌ VÀ TÊN tiếng Việt chuẩn xác (Ví dụ: "Trương Văn Trung", "Nguyễn Văn Chung", "Nguyễn Huy Phương", "Nguyễn Quang Tuấn", "Trịnh Văn Đức", "Trịnh Đức Thịnh", "Hoàng Công Minh", "Trần Hoàng Anh", "Bùi Trung Hiếu", "Phạm Anh Tuấn", "Hoàng Đình Thành", "Hoàng Thị Phương", "Phùng Bá Hoan", "Võ Trọng Tưởng", "Đào Xuân Quế").
+2. TUYỆT ĐỐI LOẠI BỎ các thành phần gây nhiễu:
+   - Các chữ cái viết tắt đại diện cho avatar ở đầu dòng (như "Po", "Ps", "Mà", "Dạ", "Lại", "BH", "ĐQ", "Ne", "We es", "Lê", "Mã", v.v.)
+   - Số thứ tự, dấu chấm hoặc ký hiệu đầu dòng (như "1", "(1", "01.", "[1]", v.v.)
+   - Ngày tháng năm sinh (như "31/01/1985", "8/3/1991", "sn11/4/1981", "14/07/1986", v.v.)
+   - Tên thiết bị, nhãn người dùng (như "(iPhone)", "(Samsung)", "(Galaxy)", "(Redmi)", "(Oppo)", "(iPad)", "(Host)", "(Co-host)", "(Me)", "(Chủ tọa)", v.v.)
    - Mã lớp, khóa học, chuyên ngành (như "CNTT", "K19", "CĐ", "Cnttk", "Cnt Zá", v.v.)
    - Ký tự lạ, dấu ngoặc, mã thiết bị ở cuối dòng (như "(Z4)", "(Zf)", "[A", "[4", "&", "©", "x", v.v.)
-   - Các dòng giao diện hoặc chuỗi rác không phải tên người tham gia (như "Participants", "Search", "Mute All", "We es x", v.v.)
-3. Ví dụ bóc tách đúng:
-   - "We Es" -> BỎ HOÀN TOÀN
-   - "Phạm Đình Diện Cnttk" -> "Phạm Đình Diện"
-   - "Phùng Ba Hoan" -> "Phùng Bá Hoan"
-   - "Lê Trần Ngọc Bảo" (Lê là avatar) -> "Trần Ngọc Bảo"
-   - "Trần Thế Anh Cnt Zá" -> "Trần Thế Anh"
-   - "Lại Trịnh Đức Thịnh" (Lại là avatar) -> "Trịnh Đức Thịnh"
-   - "Mà Võ Trọng Tưởng" (Mà là avatar) -> "Võ Trọng Tưởng"
-   - "Dạ Đào Xuân Quế" (Dạ là avatar) -> "Đào Xuân Quế"
-4. Mỗi học viên là 1 dòng riêng biệt. Viết hoa chữ cái đầu mỗi từ và giữ nguyên dấu tiếng Việt chuẩn.
-5. KHÔNG thêm bất kỳ số thứ tự, gạch đầu dòng hay lời giải thích nào.
-6. Nếu ảnh không có danh sách người tham gia, chỉ trả về chữ RONG.`;
+   - Các nút giao diện Zoom (như "Participants", "Search", "Mute All", "Invite", v.v.)
+3. Đảm bảo chữ cái đầu mỗi từ viết hoa và giữ nguyên đầy đủ dấu tiếng Việt chuẩn.
+4. Mỗi người là 1 dòng riêng biệt. KHÔNG thêm bất kỳ số thứ tự, gạch đầu dòng hay lời giải thích nào.
+5. Nếu ảnh không có danh sách người tham gia, chỉ trả về chữ RONG.`;
 
     const body = {
       contents: [
@@ -76,12 +68,11 @@ QUY TẮC BẮT BUỘC:
 
     // Modern Gemini models supported by Google AI Studio (prioritizing high-availability flash-lite)
     const models = [
-      "gemini-3.5-flash-lite",
       "gemini-flash-lite-latest",
-      "gemini-3.8-flash",
-      "gemini-3.5-flash",
-      "gemini-3.7-flash",
       "gemini-flash-latest",
+      "gemini-2.5-flash-lite",
+      "gemini-3.8-flash",
+      "gemini-3.5-flash-lite",
     ];
     let lastError: any = null;
 

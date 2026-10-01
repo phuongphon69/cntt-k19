@@ -124,7 +124,8 @@
   ],
   "createdSheets": [
     "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT",
-    "DD KỸ THUẬT LẬP TRÌNH"
+    "DD KỸ THUẬT LẬP TRÌNH",
+    "TEST_DD_AUTOMATION_SUITE"
   ],
   "recordedAttendanceRounds": [
     {
@@ -145,7 +146,7 @@
           "value": ""
         }
       ],
-      "recordedAt": "2026-09-30T08:24:15.953Z"
+      "recordedAt": "2026-09-30T09:20:32.112Z"
     },
     {
       "sheetName": "DD CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT",
@@ -170,7 +171,51 @@
         }
       ],
       "recordedAt": "2026-09-30T07:47:46.671Z"
+    },
+    {
+      "sheetName": "TEST_DD_AUTOMATION_SUITE",
+      "sessionDate": "29/09/2026",
+      "roundNumber": 1,
+      "updates": [
+        {
+          "studentId": "nguyen_huy_phuong",
+          "value": ""
+        },
+        {
+          "studentId": "hoang_cong_minh",
+          "value": ""
+        },
+        {
+          "studentId": "bui_hong_quan",
+          "value": ""
+        }
+      ],
+      "recordedAt": "2026-10-01T05:24:22.361Z"
+    },
+    {
+      "sheetName": "TEST_DD_AUTOMATION_SUITE",
+      "sessionDate": "29/09/2026",
+      "roundNumber": 2,
+      "updates": [
+        {
+          "studentId": "nguyen_huy_phuong",
+          "value": ""
+        }
+      ],
+      "recordedAt": "2026-10-01T04:58:57.216Z"
+    },
+    {
+      "sheetName": "TEST_DD_AUTOMATION_SUITE",
+      "sessionDate": "29/09/2026",
+      "roundNumber": 3,
+      "updates": [
+        {
+          "studentId": "nguyen_huy_phuong",
+          "value": ""
+        }
+      ],
+      "recordedAt": "2026-10-01T04:58:57.216Z"
     }
   ],
-  "lastSyncedAt": "2026-09-30T08:24:26.082Z"
+  "lastSyncedAt": "2026-10-01T05:24:31.925Z"
 }

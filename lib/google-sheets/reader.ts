@@ -169,6 +169,7 @@ export async function getWorkbookSheetNames(): Promise<string[]> {
       "DD TIN HỌC",
       "DD TIẾNG ANH",
       "DD GDTC",
+      "MẪU",
       "MẪU MÔN HỌC",
       "TỔNG HỢP",
       ...getCreatedSheets(),
@@ -732,14 +733,31 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
   const recordedRounds = getRecordedAttendanceRounds(sheetName);
   if (recordedRounds.length > 0) {
     for (const entry of recordedRounds) {
+      const normEntryDate = (() => {
+        const d = parseVNDate(entry.sessionDate);
+        return d
+          ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+          : entry.sessionDate.trim();
+      })();
+
       // Ensure session exists
-      let session = parsed.sessions.find(
-        (s) => s.date === entry.sessionDate || s.date.includes(entry.sessionDate) || entry.sessionDate.includes(s.date)
-      );
+      let session = parsed.sessions.find((s) => {
+        const sD = parseVNDate(s.date);
+        const sNorm = sD
+          ? `${String(sD.getDate()).padStart(2, "0")}/${String(sD.getMonth() + 1).padStart(2, "0")}/${sD.getFullYear()}`
+          : s.date.trim();
+        return (
+          s.date === entry.sessionDate ||
+          sNorm === normEntryDate ||
+          s.date.includes(entry.sessionDate) ||
+          entry.sessionDate.includes(s.date)
+        );
+      });
+
       if (!session) {
         session = {
           index: parsed.sessions.length + 1,
-          date: entry.sessionDate,
+          date: normEntryDate,
           colStart: 5 + parsed.sessions.length * 4,
         };
         parsed.sessions.push(session);
@@ -753,21 +771,28 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
             normalizeVietnameseNameWithoutAccent(r.studentName).replace(/\s+/g, "_") === upd.studentId
         );
         if (rec) {
-          if (!rec.sessions[session.date]) {
-            rec.sessions[session.date] = {
+          const sessDateKey = session.date;
+          if (!rec.sessions[sessDateKey]) {
+            rec.sessions[sessDateKey] = {
               round1: "",
               round2: "",
               round3: "",
               rate: 0,
-              isRecorded: true,
+              isRecorded: false,
               status: "PRESENT",
             };
           }
-          const sessObj = rec.sessions[session.date];
-          if (entry.roundNumber === 1) sessObj.round1 = upd.value;
-          else if (entry.roundNumber === 2) sessObj.round2 = upd.value;
-          else if (entry.roundNumber === 3) sessObj.round3 = upd.value;
-          sessObj.isRecorded = true;
+          const sessObj = rec.sessions[sessDateKey];
+          // Only update if upd.value has an actual mark
+          if (upd.value !== undefined && upd.value !== null && String(upd.value).trim().length > 0) {
+            if (entry.roundNumber === 1) sessObj.round1 = upd.value;
+            else if (entry.roundNumber === 2) sessObj.round2 = upd.value;
+            else if (entry.roundNumber === 3) sessObj.round3 = upd.value;
+            sessObj.isRecorded = true;
+          }
+          if (normEntryDate !== sessDateKey) {
+            rec.sessions[normEntryDate] = sessObj;
+          }
         }
       }
     }

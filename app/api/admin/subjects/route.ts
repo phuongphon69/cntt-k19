@@ -23,26 +23,33 @@ export async function POST(req: NextRequest) {
   try {
     const session = await requireAdminSession();
     const body = await req.json();
-    const { name, teacher, totalSessions, createSheet } = body;
+    const name = String(body.name || body.subjectName || "").trim();
+    const teacher = String(body.teacher || body.teacherName || "").trim();
+    const totalSessions = parseInt(body.totalSessions || "12", 10);
+    const overwrite = body.overwrite === true;
+    const sessionDates = Array.isArray(body.sessionDates) ? body.sessionDates : undefined;
 
     if (!name) {
       return NextResponse.json({ success: false, error: "Vui lòng nhập tên môn học" }, { status: 400 });
     }
 
     let sheetName = "";
-    if (createSheet !== false) {
+    if (body.createSheet !== false) {
       const res = await createNewSubjectSheet(
         name,
-        teacher || "",
-        parseInt(totalSessions || "12", 10),
-        session.username
+        teacher,
+        totalSessions,
+        session.username,
+        { overwrite, sessionDates }
       );
       sheetName = res.sheetName;
     }
 
     return NextResponse.json({
       success: true,
-      message: `Đã tạo môn học "${name}" thành công`,
+      message: overwrite
+        ? `Đã đồng bộ và định dạng chuẩn MẪU cho môn học "${name}"`
+        : `Đã tạo môn học "${name}" thành công`,
       sheetName,
     });
   } catch (error: any) {

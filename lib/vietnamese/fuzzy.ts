@@ -64,6 +64,17 @@ export function calculateNameMatchScore(
   const sTokens = getVietnameseNameTokens(studentName);
   const qTokens = getVietnameseNameTokens(queryName);
 
+  // 1b. Sorted tokens match (e.g. inverted name like "Chung Nguyễn Văn" vs "Nguyễn Văn Chung")
+  if (sTokens.slice().sort().join(" ") === qTokens.slice().sort().join(" ")) {
+    return 98;
+  }
+
+  // 1c. Distance of 1 character on normalized name (minor OCR typo e.g. 'u' vs 'o')
+  const nameDist = levenshteinDistance(sNorm, qNorm);
+  if (nameDist <= 1) {
+    return 95;
+  }
+
   // 2. All student tokens contained in query or vice versa
   const sInQ = sTokens.every((t) => qTokens.includes(t));
   const qInS = qTokens.every((t) => sTokens.includes(t));
@@ -80,6 +91,16 @@ export function calculateNameMatchScore(
   // 3. Token matching with initials & first name weight
   const sFirstName = sTokens[sTokens.length - 1];
   const qFirstName = qTokens[qTokens.length - 1];
+  const sLastName = sTokens[0];
+  const qLastName = qTokens[0];
+
+  // Strong match: Both Last name (họ) and First name (tên) match exactly
+  if (sLastName === qLastName && (sFirstName === qFirstName || sTokens.includes(qFirstName))) {
+    const commonTokens = sTokens.filter((t) => qTokens.includes(t)).length;
+    if (commonTokens >= 2) {
+      return 92;
+    }
+  }
 
   let tokenMatchCount = 0;
   let hasFirstNameMatch = false;
@@ -104,12 +125,15 @@ export function calculateNameMatchScore(
 
   // Bonus if student's primary given name matches
   if (hasFirstNameMatch) {
-    score = Math.max(score, 75);
+    score = Math.max(score, 78);
+    if (nameDist <= 2) {
+      score = Math.max(score, 90);
+    }
   }
 
   // If query's last word is anywhere in student's name (e.g. "Huy" in "Nguyen Huy Phuong")
   if (sTokens.includes(qFirstName)) {
-    score = Math.max(score, 70);
+    score = Math.max(score, 72);
   }
 
   // If first name doesn't match at all and string similarity is low, penalize
