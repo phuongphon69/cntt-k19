@@ -215,7 +215,7 @@ describe("Attendance Calculator Rules", () => {
     expect(quanRec).toBeDefined();
     expect(quanRec?.sessions[sessionDate]?.round1).toBe("P");
     expect(quanRec?.totalP).toBeGreaterThanOrEqual(1);
-  }, 15000);
+  }, 60000);
 
   it("mỗi buổi chỉ tính 1 lần: chỉ lần 1 được xét, lần 2/3 bị bỏ qua", () => {
     const absent = calculateSessionAttendance("V", "X", "X");

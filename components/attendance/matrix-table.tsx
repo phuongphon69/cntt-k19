@@ -65,9 +65,11 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
   const handleCellClick = (record: StudentAttendanceRecord, date: string) => {
     const sess = record.sessions[date];
     const isLateJoinMissed = sess?.status === "NOT_APPLICABLE";
-    const is0of3 = !sess?.isRecorded || sess?.rate === 0;
-    const isAbsent1of3 = !!sess?.isRecorded && sess.rate > 0 && sess.rate < 66;
-    const isFullAttended = !!sess?.isRecorded && sess.rate >= 66;
+    // Mỗi buổi chỉ tính 1 lần điểm danh: X = có mặt, còn lại không tính có mặt
+    const mark = String(sess?.round1 || "").trim().toUpperCase();
+    const isFullAttended = !!sess?.isRecorded && mark === "X";
+    const is0of3 = !isFullAttended;
+    const isAbsent1of3 = false;
 
     let displayText = "--";
     if (isLateJoinMissed) {
@@ -75,7 +77,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
     } else if (is0of3) {
       displayText = "--";
     } else {
-      displayText = sess.rate >= 100 ? "3/3" : sess.rate >= 66 ? "2/3" : "1/3";
+      displayText = sess?.isRecorded && mark ? mark : "--";
     }
 
     setActiveDrawer({
@@ -96,11 +98,15 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
       isFullAttendance: isFullAttended,
       note: isLateJoinMissed
         ? `Học viên vào lớp ngày ${record.dateJoinedGroup || "chưa rõ"} (sau ngày diễn ra buổi học ${date}) nên được ghi nhận là: Thiếu buổi (không tính vào tỷ lệ chuyên cần).`
-        : is0of3
-        ? "Trường hợp 0/3 cũng là vắng mặt. Học viên không có mặt lần nào trong 3 lần điểm danh của buổi học này."
-        : isAbsent1of3
-        ? "Tính là vắng mặt ngày học này do chỉ có mặt 1/3 lần điểm danh (quy định yêu cầu có mặt từ 2/3 lần điểm danh trở lên mới được tính là có tham gia học đầy đủ)."
-        : "Đạt điều kiện: Có mặt từ 2/3 lần điểm danh trở lên được tính ngày đó có tham gia học đầy đủ.",
+        : isFullAttended
+        ? "Có mặt: buổi học này được tính là có tham gia."
+        : mark === "P"
+        ? "Có phép: buổi học này không được tính là có mặt."
+        : mark === "M"
+        ? "Đi muộn: buổi học này không được tính là có mặt."
+        : sess?.isRecorded
+        ? "Vắng mặt buổi học này."
+        : "Buổi học này chưa có kết quả điểm danh.",
     });
   };
 
@@ -222,7 +228,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
         <div className="flex items-center gap-2">
           <Info className="w-4 h-4 shrink-0" />
           <span>
-            Bấm vào từng ô kết quả buổi học (ví dụ <strong>3/3</strong> hoặc <strong>2/3</strong>) để xem chi tiết kết quả của từng Lần điểm danh.
+            Bấm vào từng ô kết quả buổi học (<strong>X</strong> có mặt, <strong>P</strong> phép, <strong>M</strong> muộn, <strong>V</strong> vắng) để xem chi tiết và sửa kết quả.
           </span>
         </div>
         <div className="flex items-center gap-1 text-[11px] opacity-80 shrink-0">
@@ -468,7 +474,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-rose-50/50 dark:bg-rose-950/30 p-3.5 rounded-2xl border border-rose-100 dark:border-rose-900/40">
-              Hành động này sẽ xóa trắng toàn bộ điểm danh (Lần 1, Lần 2, Lần 3) của tất cả <strong>{attendanceData.records.length} học viên</strong> trong buổi học ngày <strong>{sessionToDelete.date}</strong> trên Google Sheets.
+              Hành động này sẽ xóa trắng toàn bộ điểm danh (kết quả điểm danh) của tất cả <strong>{attendanceData.records.length} học viên</strong> trong buổi học ngày <strong>{sessionToDelete.date}</strong> trên Google Sheets.
             </p>
 
             {sessionDeleteMsg && (

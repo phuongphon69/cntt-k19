@@ -26,8 +26,8 @@ export interface SessionCalcResult {
   countP: number;
   countM: number;
   rate: number; // 0..100
-  displayText: string; // e.g. "3/3", "2/3", "1/3", "--" (0/3 is displayed as "--")
-  statusText: string; // "Có tham gia học đầy đủ", "Vắng mặt (1/3)", "Chưa ghi nhận"
+  displayText: string; // "X" khi có mặt, "--" khi vắng / chưa ghi nhận
+  statusText: string; // "Có mặt", "Có phép", "Đi muộn", "Vắng mặt", "Chưa ghi nhận"
   isFullAttendance: boolean; // rate >= 66 / countX >= 2
   isAbsent: boolean; // rate > 0 && rate < 66 / countX === 1
 }

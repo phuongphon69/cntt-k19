@@ -198,7 +198,7 @@ describe("TKB Subject Sync and Session Accumulation", () => {
     expect(tiengAnh!.sessionDates![0].index).toBe(1);
 
     // GDTC must have all 11 dates available from TKB
-    const gdtc = subjects.find((s) => s.id.includes("gdtc") || s.name.includes("thể chất"));
+    const gdtc = subjects.find((s) => s.id.includes("gdtc") || s.name.toLowerCase().includes("thể chất"));
     expect(gdtc).toBeDefined();
     expect(gdtc!.totalSessions).toBe(11);
     expect(gdtc!.sessionDates?.length).toBe(11);

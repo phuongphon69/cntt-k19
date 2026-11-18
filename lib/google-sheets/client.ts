@@ -10,8 +10,13 @@ export function getDataSpreadsheetId(): string {
   return process.env.GOOGLE_DATA_SHEET_ID || DEFAULT_DATA_SPREADSHEET_ID;
 }
 
-// Sheet thời khóa biểu (tab "TKB")
+// Sheet chính (TKB + danh sách + điểm danh) = sheet dữ liệu
 export function getSpreadsheetId(): string {
+  return getDataSpreadsheetId();
+}
+
+// Sheet cũ: chỉ còn dùng để đồng bộ số điện thoại học viên
+export function getLegacySpreadsheetId(): string {
   return process.env.GOOGLE_SHEET_ID || DEFAULT_SPREADSHEET_ID;
 }
 

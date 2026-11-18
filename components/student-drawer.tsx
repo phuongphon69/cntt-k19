@@ -278,9 +278,10 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
     );
   }
 
-  const is0of3 = !data.isRecorded || data.rate === 0;
-  const is1of3 = !is0of3 && data.rate < 66; // 1/3
-  const isFullAttended = !is0of3 && data.rate >= 66; // 2/3 hoặc 3/3
+  // Mỗi buổi chỉ tính 1 lần điểm danh: X = có mặt
+  const is0of3 = !data.isRecorded || String(data.round1 || "").trim().toUpperCase() !== "X";
+  const is1of3 = false;
+  const isFullAttended = !is0of3;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -341,7 +342,7 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
               <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>Chỉnh sửa kết quả 3 lần điểm danh</span>
+                  <span>Chỉnh sửa kết quả điểm danh</span>
                 </div>
                 <button
                   type="button"
@@ -352,9 +353,7 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
                 </button>
               </div>
 
-              {renderRoundSelector("Lần 1 (Đầu buổi)", r1, setR1)}
-              {renderRoundSelector("Lần 2 (Giữa buổi)", r2, setR2)}
-              {renderRoundSelector("Lần 3 (Cuối buổi)", r3, setR3)}
+              {renderRoundSelector("Kết quả điểm danh buổi học", r1, setR1)}
 
               {/* Live Preview of Calculated Status */}
               <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
@@ -380,7 +379,7 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
                         : "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300"
                     }`}
                   >
-                    {isAllEmpty ? "--" : `${liveCountX}/3 (${liveRate}%)`}
+                    {isAllEmpty ? "--" : (liveCountX >= 1 ? "Có mặt (X)" : "Không tính có mặt")}
                   </span>
                 </div>
               </div>
@@ -403,7 +402,7 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Chi tiết 3 lần điểm danh trong buổi
+                      Kết quả điểm danh buổi học
                     </h4>
                     <button
                       type="button"
@@ -415,9 +414,7 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {renderRoundRow("Lần 1 (Đầu buổi)", r1)}
-                    {renderRoundRow("Lần 2 (Giữa buổi)", r2)}
-                    {renderRoundRow("Lần 3 (Cuối buổi)", r3)}
+                    {renderRoundRow("Kết quả điểm danh buổi học", r1)}
                   </div>
                 </div>
               )}
@@ -446,17 +443,17 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
                         <span>Tổng kết buổi học: Vắng mặt</span>
                       </div>
                       <div className="text-xs text-rose-600/90 dark:text-rose-400 mt-0.5">
-                        Có mặt: 0/3 lần điểm danh (0%)
+                        Không có mặt trong buổi học này
                       </div>
                     </div>
                     <div className="text-right">
                       <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300/80 dark:border-rose-800">
-                        0/3 • Vắng mặt
+                        Vắng mặt
                       </span>
                     </div>
                   </div>
                   <p className="text-[11px] text-rose-700/80 dark:text-rose-300 leading-relaxed border-t border-rose-200/60 dark:border-rose-900/60 pt-2">
-                    * Trường hợp 0/3 cũng là vắng mặt. Học viên không có mặt lần nào trong 3 lần điểm danh của buổi học này.
+                    * Chỉ kết quả X (có mặt) mới được tính; P, M, V đều không tính là có mặt.
                   </p>
                 </div>
               ) : is1of3 ? (
@@ -487,20 +484,20 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
                     <div>
                       <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span>Tổng kết buổi học: Có tham gia học đầy đủ</span>
+                        <span>Tổng kết buổi học: Có mặt</span>
                       </div>
                       <div className="text-xs text-emerald-700/80 dark:text-emerald-400 mt-0.5">
-                        Tỷ lệ có mặt: {data.displayText || `${data.rate}%`} ({data.rate}%)
+                        Kết quả điểm danh: {data.displayText || "X"}
                       </div>
                     </div>
                     <div className="text-right">
                       <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300/80 dark:border-emerald-800">
-                        {data.displayText || "2/3"} • Đầy đủ
+                        {data.displayText || "X"} • Có mặt
                       </span>
                     </div>
                   </div>
                   <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300 leading-relaxed border-t border-emerald-200/60 dark:border-emerald-900/60 pt-2">
-                    * Đạt điều kiện: Có mặt từ 2/3 lần điểm danh trở lên được tính ngày đó có tham gia học đầy đủ.
+                    * Có mặt: buổi học này được tính là có tham gia.
                   </p>
                 </div>
               )}
@@ -518,7 +515,7 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
                   </div>
                   <p className="mt-1 leading-relaxed">
                     Bạn có chắc muốn xóa toàn bộ kết quả điểm danh buổi ngày <strong>{data.date}</strong> của học viên{" "}
-                    <strong>{data.studentName}</strong>? Dữ liệu các cột Lần 1, 2, 3 của học viên này sẽ được xóa trắng trên Google Sheets và hệ thống.
+                    <strong>{data.studentName}</strong>? Kết quả điểm danh buổi học của học viên này sẽ được xóa trắng trên Google Sheets và hệ thống.
                   </p>
                 </div>
               </div>

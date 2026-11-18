@@ -22,16 +22,12 @@ export function StudentProfileClient({ student, subjectList }: StudentProfileCli
 
   const handleBadgeClick = (sub: Subject, date: string, sessRecord: any) => {
     if (!sessRecord) return;
-    const is0of3 = !sessRecord.isRecorded || sessRecord.rate === 0;
-    const isAbsent1of3 = sessRecord.isRecorded && sessRecord.rate > 0 && sessRecord.rate < 66;
-    const isFullAttended = sessRecord.isRecorded && sessRecord.rate >= 66;
-
-    let displayText = "--";
-    if (is0of3) {
-      displayText = "--";
-    } else {
-      displayText = sessRecord.rate >= 100 ? "3/3" : sessRecord.rate >= 66 ? "2/3" : "1/3";
-    }
+    // Mỗi buổi chỉ tính 1 lần điểm danh: X = có mặt, còn lại (P/M/V) không tính có mặt
+    const mark = String(sessRecord.round1 || "").trim().toUpperCase();
+    const isFullAttended = sessRecord.isRecorded && mark === "X";
+    const is0of3 = !isFullAttended;
+    const isAbsent1of3 = false;
+    const displayText = sessRecord.isRecorded && mark ? mark : "--";
 
     setActiveDrawer({
       isOpen: true,
@@ -46,11 +42,15 @@ export function StudentProfileClient({ student, subjectList }: StudentProfileCli
       isRecorded: true,
       isAbsent: is0of3 || isAbsent1of3,
       isFullAttendance: isFullAttended,
-      note: is0of3
-        ? "Trường hợp 0/3 cũng là vắng mặt. Học viên không có mặt lần nào trong 3 lần điểm danh của buổi học này."
-        : isAbsent1of3
-        ? "Tính là vắng mặt ngày học này do chỉ có mặt 1/3 lần điểm danh (quy định yêu cầu có mặt từ 2/3 lần điểm danh trở lên mới được tính là có tham gia học đầy đủ)."
-        : "Đạt điều kiện: Có mặt từ 2/3 lần điểm danh trở lên được tính ngày đó có tham gia học đầy đủ.",
+      note: isFullAttended
+        ? "Có mặt: buổi học này được tính là có tham gia."
+        : mark === "P"
+        ? "Có phép: buổi học này không được tính là có mặt."
+        : mark === "M"
+        ? "Đi muộn: buổi học này không được tính là có mặt."
+        : sessRecord.isRecorded
+        ? "Vắng mặt buổi học này."
+        : "Buổi học này chưa có kết quả điểm danh.",
     });
   };
 
@@ -117,14 +117,8 @@ export function StudentProfileClient({ student, subjectList }: StudentProfileCli
                 <div className="flex flex-wrap gap-2 pt-1">
                   {sheetSessions.map((s) => {
                     const sessRec = record.sessions[s.date];
-                    const isUnrecorded = !sessRec?.isRecorded || sessRec.rate === 0;
-                    const countText = isUnrecorded
-                      ? "--"
-                      : sessRec.rate >= 100
-                      ? "3/3"
-                      : sessRec.rate >= 66
-                      ? "2/3"
-                      : "1/3";
+                    const mark = String(sessRec?.round1 || "").trim().toUpperCase();
+                    const countText = sessRec?.isRecorded && mark ? mark : "--";
 
                     return (
                       <div

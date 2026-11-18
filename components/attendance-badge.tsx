@@ -116,6 +116,32 @@ export function AttendanceBadge({
     );
   }
 
+  // Kết quả 1 lần mỗi buổi: X (có mặt) / P (phép) / M (muộn) / V (vắng)
+  if (countText === "X" || countText === "P" || countText === "M" || countText === "V") {
+    const styles: Record<string, string> = {
+      X: "text-emerald-700 bg-emerald-50 border border-emerald-200/90 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+      P: "text-sky-700 bg-sky-50 border border-sky-200/90 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800",
+      M: "text-amber-700 bg-amber-50 border border-amber-200/90 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+      V: "text-rose-700 bg-rose-50 border border-rose-200/90 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800",
+    };
+    const titles: Record<string, string> = { X: "Có mặt", P: "Có phép", M: "Đi muộn", V: "Vắng mặt" };
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={titles[countText]}
+        className={cn(
+          "inline-flex items-center justify-center rounded-md text-xs font-semibold hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer",
+          styles[countText],
+          size === "sm" ? "px-2 py-0.5" : "px-2.5 py-1",
+          className
+        )}
+      >
+        {countText}
+      </button>
+    );
+  }
+
   // If session summary (e.g. "3/3", "2/3", "1/3", "--")
   if (countText !== undefined) {
     const isUnrecorded =

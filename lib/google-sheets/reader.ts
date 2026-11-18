@@ -1,5 +1,5 @@
 // lib/google-sheets/reader.ts
-import { getGoogleSheetsClient, getSpreadsheetId, getDataSpreadsheetId } from "./client";
+import { getGoogleSheetsClient, getSpreadsheetId, getDataSpreadsheetId, getLegacySpreadsheetId } from "./client";
 import { getCached, setCached } from "./cache";
 import {
   Student,
@@ -22,6 +22,84 @@ import {
 } from "./sync-store";
 import { parseVNDate } from "@/lib/utils";
 import { DEFAULT_ATTENDANCE_CONFIG } from "@/lib/attendance/calculator";
+
+/**
+ * Parse CSV text (RFC 4180: dấu ngoặc kép, xuống dòng trong ô) thành ma trận chuỗi
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+  const src = text.replace(/^﻿/, "");
+
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && src[i + 1] === "\n") i++;
+      row.push(cell);
+      cell = "";
+      rows.push(row);
+      row = [];
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Lấy gid từng tab của sheet công khai (từ trang htmlview), có cache
+ */
+async function getSheetGidMap(spreadsheetId: string): Promise<Map<string, string>> {
+  const cacheKey = `sheet_gids_${spreadsheetId}`;
+  const cached = getCached<[string, string][]>(cacheKey);
+  if (cached) return new Map(cached);
+
+  const map = new Map<string, string>();
+  try {
+    const res = await fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`, {
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const re = /items\.push\(\{name: "([^"]*)",[^}]*?gid=(\d+)/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(html)) !== null) {
+        let name = m[1];
+        try {
+          name = JSON.parse(`"${m[1]}"`);
+        } catch {}
+        map.set(name.trim().toUpperCase(), m[2]);
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to read sheet gids:", err);
+  }
+  if (map.size > 0) setCached(cacheKey, Array.from(map.entries()));
+  return map;
+}
 
 /**
  * Fetch raw matrix from a given sheet with caching and public gviz fallback
@@ -58,49 +136,28 @@ export async function fetchSheetMatrix(
 
   // 2. Fallback: Query via public gviz endpoint with cache-busting timestamp
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
-      sheetName
-    )}&_t=${Date.now()}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000), cache: "no-store" });
+    // Ưu tiên xuất CSV theo gid của tab (giữ nguyên mọi hàng và mọi ô như hiển thị trên sheet);
+    // gviz tự suy đoán hàng tiêu đề nên có thể gộp mất các hàng đầu của sheet
+    const gid = (await getSheetGidMap(spreadsheetId)).get(sheetName.trim().toUpperCase());
+    const url =
+      gid !== undefined
+        ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}&_t=${Date.now()}`
+        : `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(
+            sheetName
+          )}&_t=${Date.now()}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000), cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
-    const jsonStr = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
-    const parsed = JSON.parse(jsonStr);
+    const matrix = parseCsv(text);
 
-    const cols = parsed.table?.cols || [];
-    const rows = parsed.table?.rows || [];
-
-    // If the requested sheet is NOT "TKB", check if GViz fell back to TKB because sheet does not exist
+    // If the requested sheet is NOT "TKB", check if gviz fell back to TKB because sheet does not exist
     if (sheetName.trim().toUpperCase() !== "TKB") {
-      const isTkbFallback = cols.some((c: any) =>
-        String(c?.label || "").toUpperCase().includes("THỜI KHÓA BIỂU")
+      const isTkbFallback = matrix.slice(0, 2).some((row) =>
+        row.some((c) => String(c || "").toUpperCase().includes("THỜI KHÓA BIỂU"))
       );
       if (isTkbFallback) {
         return [];
       }
-    }
-
-    const matrix: any[][] = [];
-
-    // Check if column labels contain header row data
-    const headerRow: any[] = cols.map((c: any) => c.label || "");
-    const hasHeaderLabels = headerRow.some((h) => h && h.trim().length > 0);
-    if (hasHeaderLabels) {
-      matrix.push(headerRow);
-    }
-
-    for (const r of rows) {
-      const rowArr: any[] = [];
-      if (r.c) {
-        for (const cell of r.c) {
-          if (!cell) {
-            rowArr.push("");
-          } else {
-            rowArr.push(cell.f !== undefined && cell.f !== null ? cell.f : cell.v !== null ? cell.v : "");
-          }
-        }
-      }
-      matrix.push(rowArr);
     }
 
     setCached(cacheKey, matrix);
@@ -206,7 +263,7 @@ export async function getStudents(): Promise<Student[]> {
   const phoneById = new Map<string, string>();
   if (isDataSheetRoster) {
     try {
-      const legacy = await fetchSheetMatrix("CNTT - K19");
+      const legacy = await fetchSheetMatrix("CNTT - K19", false, getLegacySpreadsheetId());
       for (const lr of legacy) {
         const lName = normalizeVietnameseName(`${String(lr?.[1] || "").trim()} ${String(lr?.[2] || "").trim()}`);
         const lPhone = String(lr?.[9] || "").trim();
@@ -430,10 +487,20 @@ export async function getSubjects(): Promise<Subject[]> {
   const cached = getCached<Subject[]>(cacheKey);
   if (cached) return cached;
 
-  const sheetNames = await getWorkbookSheetNames();
-  const ddSheets = sheetNames.filter((s) => s.trim().toUpperCase().startsWith("DD "));
-
   const tkbMap = await getTkbSubjectStats();
+
+  // Chỉ lấy môn học trong tab TKB; môn nào đã có tab điểm danh cùng tên thì đọc kết quả từ tab đó
+  const sheetNames = await getWorkbookSheetNames();
+  const tabKeys = new Set(
+    sheetNames.map((t) => normalizeVietnameseNameWithoutAccent(t).toLowerCase().replace(/\s+/g, "_"))
+  );
+  const ddSheets: string[] = [];
+  for (const [key, info] of Array.from(tkbMap.entries())) {
+    const keyNorm = normalizeVietnameseNameWithoutAccent(info.name).toLowerCase().replace(/\s+/g, "_");
+    if (tabKeys.has(keyNorm) || tabKeys.has(key)) {
+      ddSheets.push(`DD ${info.name.toUpperCase().trim()}`);
+    }
+  }
   const classStudents = await getStudents();
   const totalClassStudents = classStudents.length;
   const subjects: Subject[] = [];
