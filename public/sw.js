@@ -2,7 +2,7 @@
 // Service Worker for CNTT-K19 PWA - Push Notifications & Class Reminders
 // Version: 2.0
 
-const CACHE_NAME = "cntt-k19-v3";
+const CACHE_NAME = "cntt-k19-v4";
 const STATIC_ASSETS = ["/", "/today", "/schedule", "/subjects", "/icon-192.png", "/icon-512.png"];
 
 // ─── Install: cache static assets ───────────────────────────────────────────
@@ -54,6 +54,7 @@ self.addEventListener("fetch", (event) => {
 // ─── Push: Receive push from server (future) ────────────────────────────────
 self.addEventListener("push", (event) => {
   let data = {
+    tag: "",
     title: "🔔 CNTT-K19: Sắp đến giờ học!",
     body: "Lớp học sắp bắt đầu. Bấm để vào lớp ngay!",
     url: "/today",
@@ -74,7 +75,7 @@ self.addEventListener("push", (event) => {
       icon: data.icon || "/icon-192.png",
       badge: "/icon-192.png",
       vibrate: [300, 100, 300, 100, 500],
-      tag: "cntt-k19-class-reminder",
+      tag: data.tag || "cntt-k19-class-reminder",
       renotify: true,
       requireInteraction: true,
       data: { url: data.url || "/today" },

@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { ScheduleItem } from "@/types";
+import { ensurePushSubscription, PushSetupResult } from "@/lib/push/client";
 
 interface ClassReminderProps {
   todayClasses?: ScheduleItem[];
@@ -71,6 +72,7 @@ export function ClassReminderNotification({
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [isSupported, setIsSupported] = useState(false);
   const [swReady, setSwReady] = useState(false);
+  const [pushState, setPushState] = useState<PushSetupResult | "idle">("idle");
   const [testSent, setTestSent] = useState(false);
   const [countdown, setCountdown] = useState<CountdownState | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -93,6 +95,10 @@ export function ClassReminderNotification({
         })
         .then(() => {
           setSwReady(true);
+          // Đã cấp quyền từ trước: đảm bảo thiết bị vẫn được đăng ký nhận thông báo đẩy
+          if (Notification.permission === "granted") {
+            ensurePushSubscription().then(setPushState);
+          }
         })
         .catch((err) => {
           console.warn("[SW] Error:", err);
@@ -200,9 +206,13 @@ export function ClassReminderNotification({
     const result = await Notification.requestPermission();
     setPermission(result);
     if (result === "granted") {
+      const pushResult = await ensurePushSubscription();
+      setPushState(pushResult);
       sendNotification(
         "✅ CNTT-K19: Đã bật thông báo!",
-        "Bạn sẽ nhận chuông thông báo trước giờ học 30 phút, 15 phút và 5 phút.",
+        pushResult === "subscribed"
+          ? "Bạn sẽ nhận thông báo trước giờ học 30 phút và 10 phút, kể cả khi đã đóng app."
+          : "Bạn sẽ nhận thông báo trước giờ học khi đang mở trang này.",
         "/today"
       );
     }
@@ -343,7 +353,23 @@ export function ClassReminderNotification({
 
             {!upcomingClass && (
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Tự động rung chuông trước giờ học <strong>30 phút</strong>, <strong>15 phút</strong> và <strong>5 phút</strong>.
+                Tự động báo trước giờ học <strong>30 phút</strong> và <strong>10 phút</strong>.
+              </p>
+            )}
+
+            {isGranted && pushState === "subscribed" && (
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                Thiết bị này sẽ nhận thông báo lịch học cả khi đã đóng app.
+              </p>
+            )}
+            {isGranted && pushState === "not-configured" && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Thông báo khi đóng app chưa được bật trên hệ thống; hiện chỉ nhắc khi đang mở trang.
+              </p>
+            )}
+            {isGranted && pushState === "unsupported" && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Trình duyệt này chưa hỗ trợ thông báo khi đóng app. Trên iPhone, hãy thêm web vào Màn hình chính rồi mở lại từ biểu tượng đó.
               </p>
             )}
 

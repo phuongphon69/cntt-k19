@@ -173,3 +173,22 @@ Toàn bộ 31 unit tests tự động kiểm thử:
 - Cơ chế sao lưu kết quả điểm danh ra Google Sheet và file CSV UTF-8 BOM.
 - Quản lý và bảo vệ thông tin cá nhân của sinh viên.
  
+## 🔔 Thông báo đẩy lịch học (khi đóng app)
+
+Thiết bị đã bấm **"Cho phép thông báo"** sẽ nhận thông báo trước giờ học **30 phút** và **10 phút**, kể cả khi đã đóng app.
+(iPhone: cần thêm web vào **Màn hình chính** rồi mở từ biểu tượng đó, iOS 16.4 trở lên.)
+
+### Cài đặt trên Vercel (làm một lần)
+
+1. **Tạo nơi lưu thiết bị đăng ký** (miễn phí): vào Vercel → *Storage / Marketplace* → thêm **Upstash Redis** vào project.
+   Vercel tự thêm biến `KV_REST_API_URL` và `KV_REST_API_TOKEN` (hoặc `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`).
+2. **Thêm biến môi trường** trong Vercel → Settings → Environment Variables:
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`: cặp khóa tạo bằng `npx web-push generate-vapid-keys`
+   - `VAPID_SUBJECT`: ví dụ `mailto:email-cua-ban@gmail.com`
+   - `CRON_SECRET`: chuỗi bí mật bất kỳ, dài, khó đoán
+3. **Redeploy** project để nhận biến mới.
+4. **Đặt bộ hẹn giờ gọi mỗi 5 phút** (gói Hobby của Vercel chỉ cho cron mỗi ngày nên dùng dịch vụ ngoài miễn phí như
+   [cron-job.org](https://cron-job.org)): tạo job gọi địa chỉ
+   `https://<ten-mien>/api/push/remind?secret=<CRON_SECRET>` với chu kỳ **5 phút một lần**.
+
+Kiểm tra: mở `https://<ten-mien>/api/push/remind?secret=<CRON_SECRET>&dry=1` để xem các buổi sắp được nhắc (không gửi thật).
