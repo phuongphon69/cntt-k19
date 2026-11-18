@@ -22,7 +22,7 @@ export default async function AdminLogsPage() {
       admin: "admin",
       action: "SYNC_SPREADSHEET",
       entity: "GOOGLE_SHEETS",
-      entityId: "1nXlSGJq9DlsHsf4YFkw4ZiqQpZ2y8b4_h_EiHbhX9ec",
+      entityId: "1r_u9nuQKJ-Jgz_xAk7vdrwGcJrNL9eA1nAQv-CUP4L0",
       metadata: { status: "SUCCESS" },
     },
   ];

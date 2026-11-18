@@ -54,7 +54,11 @@ cp .env.example .env.local
 Điền các thông tin trong `.env.local`:
 ```env
 NEXT_PUBLIC_APP_NAME="CNTT K19 CĐ"
+GOOGLE_DATA_SHEET_ID="1r_u9nuQKJ-Jgz_xAk7vdrwGcJrNL9eA1nAQv-CUP4L0"
+# Sheet cũ: chỉ dùng để lấy số điện thoại học viên
 GOOGLE_SHEET_ID="1nXlSGJq9DlsHsf4YFkw4ZiqQpZ2y8b4_h_EiHbhX9ec"
+# Mã xem mục Thống kê (mặc định CNTTK19)
+STATS_ACCESS_CODE="CNTTK19"
 
 # Service Account Google Sheets (để ghi dữ liệu)
 GOOGLE_SERVICE_ACCOUNT_EMAIL="your-service-account@project.iam.gserviceaccount.com"
@@ -91,7 +95,7 @@ Truy cập ứng dụng tại: `http://localhost:3000`
 7. Mở file JSON và copy:
    - `client_email` dán vào `GOOGLE_SERVICE_ACCOUNT_EMAIL`
    - `private_key` dán vào `GOOGLE_PRIVATE_KEY`
-8. **QUAN TRỌNG NHẤT**: Mở Google Spreadsheet `1nXlSGJq9DlsHsf4YFkw4ZiqQpZ2y8b4_h_EiHbhX9ec`, bấm nút **Chia sẻ (Share)** ở góc phải trên, thêm email Service Account với quyền **Người chỉnh sửa (Editor)**.
+8. **QUAN TRỌNG NHẤT**: Mở Google Spreadsheet `1r_u9nuQKJ-Jgz_xAk7vdrwGcJrNL9eA1nAQv-CUP4L0`, bấm nút **Chia sẻ (Share)** ở góc phải trên, thêm email Service Account với quyền **Người chỉnh sửa (Editor)**.
 
 ---
 

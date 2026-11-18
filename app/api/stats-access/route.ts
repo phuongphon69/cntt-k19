@@ -27,23 +27,21 @@ export async function POST(req: NextRequest) {
 
     const { code } = (await req.json()) as { code?: string };
     if (!code || !code.trim()) {
-      return NextResponse.json({ success: false, error: "Vui lòng nhập mã xem thống kê" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Vui lòng nhập mã" }, { status: 400 });
     }
 
-    const result = verifyStatsAccessCode(code);
-    if (!result.valid || !result.expiresAt) {
+    if (!verifyStatsAccessCode(code)) {
       const cur = entry && entry.resetAt > now ? entry : { count: 0, resetAt: now + WINDOW_MS };
       cur.count++;
       attempts.set(ip, cur);
       return NextResponse.json(
-        { success: false, error: "Mã không đúng hoặc đã hết hạn. Vui lòng liên hệ Lớp trưởng để được cấp mã." },
+        { success: false, error: "Mã không đúng. Vui lòng liên hệ Lớp trưởng để được xem mục này." },
         { status: 401 }
       );
     }
 
     attempts.delete(ip);
-    const token = await createStatsAccessToken(result.expiresAt);
-    await setStatsAccessCookie(token, result.expiresAt);
+    await setStatsAccessCookie(await createStatsAccessToken());
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("POST /api/stats-access error:", error);

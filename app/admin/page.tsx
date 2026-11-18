@@ -14,6 +14,7 @@ import {
   Sparkles,
   RefreshCw,
 } from "lucide-react";
+import { getSpreadsheetId } from "@/lib/google-sheets/client";
 import { getWorkbookSheetNames, getStudents, getSubjects, getSchedule } from "@/lib/google-sheets/reader";
 import { lastSyncTimestamp } from "@/lib/google-sheets/cache";
 import { checkDataHealth } from "@/lib/data-health/checker";
@@ -72,7 +73,7 @@ export default async function AdminDashboardPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Spreadsheet ID: <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[11px]">1nXlSGJq9DlsHsf4YFkw4ZiqQpZ2y8b4_h_EiHbhX9ec</code>
+                Spreadsheet ID: <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[11px]">{getSpreadsheetId()}</code>
               </p>
             </div>
           </div>
