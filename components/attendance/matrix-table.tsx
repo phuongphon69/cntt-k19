@@ -218,7 +218,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
           </Link>
 
           <div className="hidden sm:flex items-center px-3.5 py-2 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200/80 dark:border-indigo-800 text-xs font-bold text-indigo-700 dark:text-indigo-300 whitespace-nowrap">
-            Sĩ số: {attendanceData.records.length}/{totalClassStudents} học sinh
+            Sĩ số: {attendanceData.records.length} học sinh
           </div>
         </div>
       </div>
@@ -247,7 +247,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
                 <th className="sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 p-3.5 min-w-[190px] sm:min-w-[240px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] border-r border-slate-200 dark:border-slate-800">
                   <div className="flex flex-col gap-0.5">
                     <span className="font-extrabold text-slate-800 dark:text-slate-200">
-                      Học viên ({records.length}/{totalClassStudents} học sinh)
+                      Học viên ({records.length} học sinh)
                     </span>
                     {searchQuery && (
                       <span className="text-[10px] text-slate-400 font-normal">
@@ -335,11 +335,6 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
                             Vào lớp: {rec.dateJoinedGroup}
                           </div>
                         )}
-                        {(rec.missedLateJoinCount || 0) > 0 && (
-                          <div className="text-amber-600 dark:text-amber-400 font-semibold">
-                            Thiếu {rec.missedLateJoinCount} buổi (vào sau)
-                          </div>
-                        )}
                       </div>
                     </td>
 
@@ -368,10 +363,10 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
                             <button
                               type="button"
                               onClick={() => handleCellClick(rec, sess.date)}
-                              title={`Thiếu buổi do vào lớp ngày ${rec.dateJoinedGroup || ""} (sau ngày học ${sess.date})`}
-                              className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors cursor-pointer select-none"
+                              title={`Chưa vào lớp (vào lớp ngày ${rec.dateJoinedGroup || ""}), không tính buổi học ${sess.date}`}
+                              className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs text-slate-300 dark:text-slate-600 hover:text-slate-400 transition-colors cursor-pointer select-none"
                             >
-                              Thiếu buổi
+                              –
                             </button>
                           </td>
                         );

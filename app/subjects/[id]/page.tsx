@@ -60,7 +60,7 @@ export default async function SubjectDetailPage({ params }: SubjectDetailPagePro
             <span>•</span>
             <span className="flex items-center gap-1.5 font-semibold text-indigo-600 dark:text-indigo-400">
               <BookOpen className="w-4 h-4" />
-              Sĩ số: {attendanceData.records.length}/{attendanceData.totalClassStudents || subject.totalClassStudents || 43} học sinh
+              Sĩ số: {attendanceData.records.length} học sinh
             </span>
             <span>•</span>
             <span className="flex items-center gap-1.5">

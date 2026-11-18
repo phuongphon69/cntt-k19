@@ -523,6 +523,20 @@ export async function getSubjects(): Promise<Subject[]> {
   const subjects: Subject[] = [];
   const processedTkbIds = new Set<string>();
 
+  // Sĩ số theo ngày kết thúc môn: học viên vào lớp muộn hơn ngày học cuối của môn thì không tính
+  const enrolledByEnd = (dates: string[]): number => {
+    let end: Date | null = null;
+    for (const d of dates) {
+      const pd = parseVNDate(d);
+      if (pd && (!end || pd.getTime() > end.getTime())) end = pd;
+    }
+    if (!end) return totalClassStudents;
+    return classStudents.filter((st) => {
+      const jd = parseVNDate(st.dateJoinedGroup);
+      return !jd || jd.getTime() <= end!.getTime();
+    }).length;
+  };
+
   // Helper to match subject IDs with aliases
   const matchTkbKey = (targetId: string, sheetTitle: string): string | null => {
     const targetNorm = normalizeVietnameseNameWithoutAccent(targetId).toLowerCase().replace(/\s+/g, "_");
@@ -637,8 +651,8 @@ export async function getSubjects(): Promise<Subject[]> {
       averageAttendanceRate: avgRate,
       hasSheet: true,
       tkbSessionsCount: tkbInfo?.count,
-      enrolledStudentsCount: totalClassStudents,
-      totalClassStudents: totalClassStudents,
+      enrolledStudentsCount: parsed.enrolledStudentsCount ?? totalClassStudents,
+      totalClassStudents: parsed.enrolledStudentsCount ?? totalClassStudents,
       sessionDates,
     });
   }
@@ -686,8 +700,8 @@ export async function getSubjects(): Promise<Subject[]> {
       isFromTkb: true,
       hasSheet: hasSheetCreated,
       tkbSessionsCount: tkbInfo.count,
-      enrolledStudentsCount: totalClassStudents,
-      totalClassStudents: totalClassStudents,
+      enrolledStudentsCount: enrolledByEnd(tkbInfo.dates || []),
+      totalClassStudents: enrolledByEnd(tkbInfo.dates || []),
       sessionDates,
     });
   }
@@ -820,11 +834,24 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
   }
 
   const classStudents = await getStudents();
-  parsed.totalClassStudents = classStudents.length;
 
-  // Reconcile records strictly against official class roster (43 students)
+  // Ngày kết thúc môn = ngày học cuối cùng của môn
+  let subjectEnd: Date | null = null;
+  for (const s of parsed.sessions) {
+    const d = parseVNDate(s.date);
+    if (d && (!subjectEnd || d.getTime() > subjectEnd.getTime())) subjectEnd = d;
+  }
+  for (const d of tkbDates) {
+    const pd = parseVNDate(d);
+    if (pd && (!subjectEnd || pd.getTime() > subjectEnd.getTime())) subjectEnd = pd;
+  }
+
+  // Reconcile records against official class roster.
+  // Học viên vào lớp sau ngày kết thúc môn thì không thuộc sĩ số và không tính buổi học của môn này.
   const officialRecords: StudentAttendanceRecord[] = [];
   for (const cs of classStudents) {
+    const joinDate = parseVNDate(cs.dateJoinedGroup);
+    if (joinDate && subjectEnd && joinDate.getTime() > subjectEnd.getTime()) continue;
     const existing = parsed.records.find(
       (r) =>
         r.studentId === cs.id ||
@@ -858,7 +885,9 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
     }
   }
   parsed.records = officialRecords;
-  parsed.enrolledStudentsCount = classStudents.length;
+  // Sĩ số của môn: học viên vào lớp trước hoặc trong thời gian môn học diễn ra
+  parsed.totalClassStudents = officialRecords.length;
+  parsed.enrolledStudentsCount = officialRecords.length;
 
   // 5. Overlay any confirmed attendance rounds from persistent sync-store
   const recordedRounds = getRecordedAttendanceRounds(sheetName);
