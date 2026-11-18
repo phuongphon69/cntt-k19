@@ -1,9 +1,17 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
+
+// Font Inter: gọn, dễ đọc, hỗ trợ đầy đủ tiếng Việt
+const inter = Inter({
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -43,7 +51,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className="min-h-screen flex flex-col bg-slate-50/60 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100">
+      <head>
+        {/* Áp dụng chế độ tối trước khi vẽ trang để không bị nháy trắng lóa lúc tải */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}",
+          }}
+        />
+      </head>
+      <body className={`${inter.variable} min-h-screen flex flex-col bg-slate-50/60 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-200`}>
         <Navbar />
         <main className="flex-1 pb-12">{children}</main>
         <Footer />

@@ -107,3 +107,56 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+
+/* ===== Giao diện dễ nhìn, giản dị ===== */
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hộp chọn (select): nền tối chữ sáng, không bị trắng lóa ở chế độ tối */
+select {
+  color-scheme: light;
+}
+.dark select {
+  color-scheme: dark;
+}
+select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+.dark select option {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+.dark select option:checked {
+  background-color: #4338ca;
+  color: #ffffff;
+}
+
+/* Giảm độ đậm chữ quá nặng (font-black/extrabold) cho dễ đọc */
+.font-black,
+.font-extrabold {
+  font-weight: 700;
+}
+
+/* Chữ trắng tinh trên nền tối gây chói: làm dịu nhẹ (không đụng tới nút có nền màu) */
+.dark .text-white:not([class*="bg-"]) {
+  color: #e2e8f0;
+}
+
+/* Bỏ chữ in hoa kèm giãn chữ quá rộng ở nhãn nhỏ */
+.tracking-widest,
+.tracking-wider {
+  letter-spacing: 0.04em;
+}
