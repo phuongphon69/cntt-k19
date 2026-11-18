@@ -48,25 +48,51 @@ export async function writeAttendanceRound(
   const spreadsheetId = getSpreadsheetId();
   const client = getGoogleSheetsClient();
 
-  // 1. Check if sheet exists in Google Sheets workbook; if not, auto-create it!
+  // 1. Check if sheet exists in Google Sheets workbook; if not, auto-create it from template "MẪU"!
   const sheetNames = await getWorkbookSheetNames();
   const sheetExists = sheetNames.some(
     (s) => s.trim().toUpperCase() === sheetName.trim().toUpperCase()
   );
   let sheetCreated = false;
 
+  const cleanTitle = sheetName.replace(/^DD\s+/i, "").trim();
+  const tkbStats = await getTkbSubjectStats();
+  let teacher = "";
+  let totalSessions = 12;
+  let sessionDates: string[] = [];
+
+  const normKey = normalizeVietnameseNameWithoutAccent(cleanTitle).toLowerCase().replace(/\s+/g, "_");
+  for (const [key, info] of Array.from(tkbStats.entries())) {
+    const keyNorm = normalizeVietnameseNameWithoutAccent(key).toLowerCase().replace(/\s+/g, "_");
+    if (
+      keyNorm === normKey ||
+      keyNorm.includes(normKey) ||
+      normKey.includes(keyNorm) ||
+      (normKey.includes("the_chat") && keyNorm.includes("gdtc")) ||
+      (normKey.includes("gdtc") && keyNorm.includes("the_chat"))
+    ) {
+      teacher = info.teacher || "";
+      totalSessions = info.count || 12;
+      sessionDates = info.dates || [];
+      break;
+    }
+  }
+
+  if (sessionDates.length === 0 && sessionDate) {
+    sessionDates = [sessionDate];
+  }
+
   if (!sheetExists) {
-    const cleanTitle = sheetName.replace(/^DD\s+/i, "").trim();
-    if (client) {
-      try {
-        await createNewSubjectSheet(cleanTitle, "", 12, adminUser);
-        sheetCreated = true;
-      } catch (err) {
-        console.warn(`[Auto-create sheet ${sheetName}]:`, err);
-      }
+    try {
+      await createNewSubjectSheet(cleanTitle, teacher, totalSessions, adminUser, {
+        overwrite: false,
+        sessionDates,
+      });
+      sheetCreated = true;
+    } catch (err) {
+      console.warn(`[Auto-create sheet ${sheetName} from MẪU]:`, err);
     }
     markSubjectHasSheet(sheetName);
-    sheetCreated = true;
   }
 
   // 2. Load or synthesize parsed sheet data
@@ -152,6 +178,10 @@ export async function writeAttendanceRound(
         body: JSON.stringify({
           action: "writeAttendance",
           sheetName,
+          subjectName: cleanTitle,
+          teacherName: teacher,
+          totalSessions,
+          sessionDates,
           sessionDate,
           sessionIndex: session.index,
           roundNumber,

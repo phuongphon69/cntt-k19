@@ -535,7 +535,15 @@ function doPost(e) {
     // 1. TỰ ĐỘNG TẠO HOẶC ĐỒNG BỘ SHEET MÔN MỚI TỪ SHEET MẪU
     if (data.action === "createSheet" || (data.sheetName && !ss.getSheetByName(data.sheetName))) {
       var sheet = ss.getSheetByName(data.sheetName);
-      if (sheet && data.overwrite === true) {
+      var isTemplate = false;
+      if (sheet) {
+        try {
+          var topCell = String(sheet.getRange(1, 1).getValue() || "").toUpperCase();
+          isTemplate = topCell.indexOf("BẢNG ĐIỂM DANH") !== -1;
+        } catch (e) {}
+      }
+
+      if (sheet && (data.overwrite === true || !isTemplate)) {
         try { ss.deleteSheet(sheet); sheet = null; } catch (e) {}
       }
       var sheetCreated = false;
@@ -561,6 +569,12 @@ function doPost(e) {
         }
       }
 
+      // Xóa các điểm danh mẫu cũ để bảng mới sạch sẽ
+      try {
+        var numColsToClear = Math.max(12, (data.sessionDates ? data.sessionDates.length * 4 : 12));
+        sheet.getRange(5, 6, Math.max(1, sheet.getLastRow() - 4), numColsToClear).clearContent();
+      } catch (e) {}
+
       ensureFullRosterInSheet(sheet);
 
       if (data.action === "createSheet") {
@@ -576,12 +590,35 @@ function doPost(e) {
     // 2. GHI ĐIỂM DANH TRỰC TIẾP
     if (data.action === "writeAttendance") {
       var sheet = ss.getSheetByName(data.sheetName);
+      var isTemplate = false;
+      if (sheet) {
+        try {
+          var topCell = String(sheet.getRange(1, 1).getValue() || "").toUpperCase();
+          isTemplate = topCell.indexOf("BẢNG ĐIỂM DANH") !== -1;
+        } catch (e) {}
+      }
+
+      if (sheet && (data.overwrite === true || !isTemplate)) {
+        try { ss.deleteSheet(sheet); sheet = null; } catch (e) {}
+      }
+
       if (!sheet) {
         var template = ss.getSheetByName("MẪU") || ss.getSheetByName("MẪU MÔN HỌC");
         sheet = template ? template.copyTo(ss).setName(data.sheetName) : ss.insertSheet(data.sheetName);
-        var subjName = data.sheetName.replace(/^DD\\s+/i, "");
+        var subjName = data.subjectName || data.sheetName.replace(/^DD\\s+/i, "");
         try { sheet.getRange(1, 1).setValue("BẢNG ĐIỂM DANH MÔN " + subjName.toUpperCase() + " - LỚP CNTT K19"); } catch (e) {}
         try { sheet.getRange(2, 2).setValue(subjName); } catch (e) {}
+        if (data.teacherName) { try { sheet.getRange(2, 4).setValue(data.teacherName); } catch (e) {} }
+        if (data.totalSessions) { try { sheet.getRange(2, 6).setValue(data.totalSessions); } catch (e) {} }
+        if (data.sessionDates && Array.isArray(data.sessionDates) && data.sessionDates.length > 0) {
+          for (var i = 0; i < data.sessionDates.length; i++) {
+            try { sheet.getRange(3, 6 + i * 4).setValue(data.sessionDates[i]); } catch (e) {}
+          }
+        }
+        try {
+          var numColsToClear = Math.max(12, (data.sessionDates ? data.sessionDates.length * 4 : 12));
+          sheet.getRange(5, 6, Math.max(1, sheet.getLastRow() - 4), numColsToClear).clearContent();
+        } catch (e) {}
         ensureFullRosterInSheet(sheet);
       }
       ss.setActiveSheet(sheet);
