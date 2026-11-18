@@ -1006,6 +1006,31 @@ export async function getSchedule(): Promise<ScheduleItem[]> {
   const rawMatrix = await fetchSheetMatrix("TKB");
   const items: ScheduleItem[] = [];
 
+  // Xác định cột theo tiêu đề của tab TKB (A: Thứ/Ngày, B: Tên lớp, C: GVBM, D: LINK LỚP ...)
+  // Dự phòng bố cục cũ: D = SĐT giáo viên, E = link Zoom, F = tài khoản Zoom, G = ghi chú
+  let colPhone = 3;
+  let colLink = 4;
+  let colAccount = 5;
+  let colNote = 6;
+  const headerRow = rawMatrix.find((row) =>
+    (row || []).some((c: any) => String(c || "").toUpperCase().includes("THỨ / NGÀY"))
+  );
+  if (headerRow) {
+    colPhone = -1;
+    colLink = -1;
+    colAccount = -1;
+    colNote = -1;
+    headerRow.forEach((cellVal: any, idx: number) => {
+      const h = normalizeVietnameseNameWithoutAccent(String(cellVal || "")).toUpperCase();
+      if (!h || idx < 3) return;
+      if (h.includes("LINK") || h.includes("ZOOM") && !h.includes("TAI KHOAN")) colLink = idx;
+      else if (h.includes("DIEN THOAI") || h.includes("SDT")) colPhone = idx;
+      else if (h.includes("TAI KHOAN")) colAccount = idx;
+      else if (h.includes("GHI CHU")) colNote = idx;
+    });
+  }
+  const cellAt = (row: any[], idx: number) => (idx >= 0 ? String(row[idx] || "").trim() : "");
+
   // Pass 1: Count total occurrences per subject in TKB
   const subjectTotalCounts = new Map<string, number>();
   for (let r = 0; r < rawMatrix.length; r++) {
@@ -1030,10 +1055,10 @@ export async function getSchedule(): Promise<ScheduleItem[]> {
     const dateAndDay = String(row[0] || "").trim();
     const subjectNameRaw = String(row[1] || "").trim();
     const teacherName = String(row[2] || "").trim();
-    const teacherPhone = String(row[3] || "").trim();
-    const zoomUrl = String(row[4] || "").trim();
-    const zoomAccount = String(row[5] || "").trim();
-    const notes = String(row[6] || "").trim();
+    const teacherPhone = cellAt(row, colPhone);
+    const zoomUrl = cellAt(row, colLink);
+    const zoomAccount = cellAt(row, colAccount);
+    const notes = cellAt(row, colNote);
 
     if (!dateAndDay || !subjectNameRaw || dateAndDay.toUpperCase().includes("THỨ / NGÀY")) {
       continue;
