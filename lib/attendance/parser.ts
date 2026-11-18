@@ -171,6 +171,13 @@ export function parseAttendanceSheet(
       break;
     }
 
+    // A real session block always has a date or a "LẦN" label in its header.
+    // Columns without either that only hold numbers are trailing summary columns
+    // (Có mặt / Muộn / Phép / Vắng / Tổng / %) and must not become "Buổi N" sessions.
+    if (!hasTkbDate && !hasCellDate && !hasSessionLabel) {
+      break;
+    }
+
     // If total sessions was declared and we reached it and have no further dates
     if (totalSessions > 0 && sessionIndex > totalSessions && !hasTkbDate && !hasCellDate) {
       break;
