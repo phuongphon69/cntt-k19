@@ -62,7 +62,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} min-h-screen flex flex-col bg-slate-50/60 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-200`}>
         <Navbar />
-        <main className="flex-1 pb-12">{children}</main>
+        <main className="flex-1 pb-24 md:pb-12">{children}</main>
         <Footer />
         <PwaInstallBanner />
       </body>

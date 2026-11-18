@@ -259,7 +259,22 @@ export async function getStudents(): Promise<Student[]> {
   }
   const students: Student[] = [];
 
-  // Sheet dữ liệu mới không có cột số điện thoại: đồng bộ SĐT theo tên từ tab "CNTT - K19" của sheet cũ
+  // Xác định cột theo tiêu đề của tab "danhsach" (sheet có thể thêm/bớt cột)
+  let colPhone = -1;
+  let colGender = -1;
+  let colJoined = -1;
+  if (isDataSheetRoster) {
+    const headerRow = rawMatrix.find((row) => String(row?.[1] || "").toUpperCase().includes("HỌ VÀ")) || [];
+    headerRow.forEach((cellVal: any, idx: number) => {
+      const h = normalizeVietnameseNameWithoutAccent(String(cellVal || "")).toUpperCase();
+      if (h.includes("DIEN THOAI") || h.includes("SDT")) colPhone = idx;
+      else if (h.includes("GIOI TINH")) colGender = idx;
+      else if (h.includes("NGAY VAO")) colJoined = idx;
+    });
+    if (colJoined === -1) colJoined = 5;
+  }
+
+  // Số điện thoại: ưu tiên cột trong sheet dữ liệu; thiếu thì lấy theo tên từ tab "CNTT - K19" của sheet cũ
   const phoneById = new Map<string, string>();
   if (isDataSheetRoster) {
     try {
@@ -315,10 +330,12 @@ export async function getStudents(): Promise<Student[]> {
       const placeOfBirth = isDataSheetRoster ? "" : String(row[6] || "").trim();
       // row[7] is ĐÃ TỐT NGHIỆP VĂN BẰNG VÀ NGÀNH HỌC
       // row[8] is NGÀY THÁNG NĂM TỐT NGHIỆP
-      const phone = isDataSheetRoster ? phoneById.get(studentId) || "" : String(row[9] || "").trim();
+      const phone = isDataSheetRoster
+        ? String(colPhone >= 0 ? row[colPhone] || "" : "").trim() || phoneById.get(studentId) || ""
+        : String(row[9] || "").trim();
       // row[10] is NGÀNH ĐĂNG KÝ HỌC
       const studySystem = isDataSheetRoster ? "" : String(row[11] || "").trim();
-      const dateJoined = String((isDataSheetRoster ? row[5] : row[12]) || "").trim();
+      const dateJoined = String((isDataSheetRoster ? row[colJoined] : row[12]) || "").trim();
       // row[13] is Miền Bắc, row[14] is Miền Nam
       const notes = isDataSheetRoster ? "" : String(row[15] || "").trim();
 

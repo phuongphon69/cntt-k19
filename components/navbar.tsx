@@ -83,21 +83,21 @@ export function Navbar() {
   return (
     <>
       <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 glass-header">
-        <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        <div className="container mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
           {/* Logo & Class Title */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200/80 dark:border-slate-700/80 bg-slate-900">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group min-w-0">
+            <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200/80 dark:border-slate-700/80 bg-slate-900">
               <img
                 src="/logo.png"
                 alt="Logo CNTT - K19"
                 className="w-full h-full object-cover"
               />
             </div>
-            <div>
-              <div className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-none group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+            <div className="min-w-0">
+              <div className="font-extrabold text-[15px] sm:text-lg whitespace-nowrap text-slate-900 dark:text-white tracking-tight leading-none group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                 CNTT - K19 CĐ
               </div>
-              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
+              <div className="hidden sm:block text-[11px] font-medium text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
                 Hệ thống Điểm danh & Lịch học
               </div>
             </div>
@@ -126,12 +126,12 @@ export function Navbar() {
           </nav>
 
           {/* Action Tools */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Search Button */}
             <button
               type="button"
               onClick={() => setIsSearchOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200/60 dark:border-slate-700/60 transition-colors"
+              className="flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200/60 dark:border-slate-700/60 transition-colors"
             >
               <Search className="w-4 h-4 text-slate-400" />
               <span className="hidden sm:inline">Tìm kiếm...</span>
@@ -144,7 +144,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => setIsShareOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60 transition-colors"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60 transition-colors"
               title="Gửi link cho cả lớp truy cập"
             >
               <Share2 className="w-3.5 h-3.5" />
@@ -155,7 +155,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => setIsInstallOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200/60 dark:border-slate-700/60 transition-colors"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200/60 dark:border-slate-700/60 transition-colors"
               title="Cài đặt App vào màn hình chính điện thoại"
             >
               <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
@@ -166,7 +166,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              className="w-10 h-10 sm:w-auto sm:h-auto flex items-center justify-center sm:p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
               title="Đổi giao diện Sáng / Tối"
             >
               {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
@@ -175,7 +175,7 @@ export function Navbar() {
             {/* Admin Link */}
             <Link
               href="/admin"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl transition-all shadow-sm shadow-slate-900/10"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl transition-all shadow-sm shadow-slate-900/10"
             >
               <Shield className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Quản trị</span>
@@ -185,7 +185,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 md:hidden text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              className="w-10 h-10 flex items-center justify-center md:hidden text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
             >
               {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -239,6 +239,14 @@ export function Navbar() {
                 <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
                 <span>Cài App MH chính</span>
               </button>
+              <Link
+                href="/admin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="col-span-2 flex items-center justify-center gap-1.5 p-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 dark:bg-indigo-600"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Khu vực Quản trị</span>
+              </Link>
             </div>
           </div>
         )}
@@ -253,7 +261,7 @@ export function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[10px] font-medium transition-colors ${
+              className={`flex flex-col items-center justify-center py-1 px-2 min-w-[56px] rounded-lg text-[10px] font-medium transition-colors ${
                 isActive
                   ? "text-indigo-600 dark:text-indigo-400 font-bold"
                   : "text-slate-500 dark:text-slate-400"
