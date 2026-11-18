@@ -202,6 +202,23 @@ export async function getStudents(): Promise<Student[]> {
   }
   const students: Student[] = [];
 
+  // Sheet dữ liệu mới không có cột số điện thoại: đồng bộ SĐT theo tên từ tab "CNTT - K19" của sheet cũ
+  const phoneById = new Map<string, string>();
+  if (isDataSheetRoster) {
+    try {
+      const legacy = await fetchSheetMatrix("CNTT - K19");
+      for (const lr of legacy) {
+        const lName = normalizeVietnameseName(`${String(lr?.[1] || "").trim()} ${String(lr?.[2] || "").trim()}`);
+        const lPhone = String(lr?.[9] || "").trim();
+        if (lName && lPhone) {
+          phoneById.set(normalizeVietnameseNameWithoutAccent(lName).replace(/\s+/g, "_"), lPhone);
+        }
+      }
+    } catch (err) {
+      console.warn("[students] cannot sync phone numbers from legacy sheet:", err);
+    }
+  }
+
   if (rawMatrix.length > 0) {
     // Find header row or skip top rows
     let startRow = 0;
@@ -241,7 +258,7 @@ export async function getStudents(): Promise<Student[]> {
       const placeOfBirth = isDataSheetRoster ? "" : String(row[6] || "").trim();
       // row[7] is ĐÃ TỐT NGHIỆP VĂN BẰNG VÀ NGÀNH HỌC
       // row[8] is NGÀY THÁNG NĂM TỐT NGHIỆP
-      const phone = isDataSheetRoster ? "" : String(row[9] || "").trim();
+      const phone = isDataSheetRoster ? phoneById.get(studentId) || "" : String(row[9] || "").trim();
       // row[10] is NGÀNH ĐĂNG KÝ HỌC
       const studySystem = isDataSheetRoster ? "" : String(row[11] || "").trim();
       const dateJoined = String((isDataSheetRoster ? row[5] : row[12]) || "").trim();

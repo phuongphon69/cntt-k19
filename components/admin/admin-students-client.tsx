@@ -147,7 +147,7 @@ export function AdminStudentsClient({ initialStudents }: AdminStudentsClientProp
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo tên, ngày sinh, số điện thoại, CCCD..."
+            placeholder="Tìm theo tên, ngày sinh, số điện thoại..."
             className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border outline-none text-slate-900 dark:text-white"
           />
         </div>
@@ -159,7 +159,7 @@ export function AdminStudentsClient({ initialStudents }: AdminStudentsClientProp
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
           >
             {showPrivateInfo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            <span>{showPrivateInfo ? "Ẩn CCCD / SĐT" : "Hiện CCCD / SĐT"}</span>
+            <span>{showPrivateInfo ? "Ẩn SĐT" : "Hiện SĐT"}</span>
           </button>
 
           <button
@@ -188,10 +188,7 @@ export function AdminStudentsClient({ initialStudents }: AdminStudentsClientProp
                 <th className="p-3.5 text-center w-12">STT</th>
                 <th className="p-3.5">Họ và tên</th>
                 <th className="p-3.5">Ngày sinh</th>
-                <th className="p-3.5">Hệ học</th>
                 {showPrivateInfo && <th className="p-3.5">Số điện thoại</th>}
-                {showPrivateInfo && <th className="p-3.5">CCCD</th>}
-                <th className="p-3.5">Nơi sinh</th>
                 <th className="p-3.5">Ngày vào nhóm</th>
                 <th className="p-3.5 text-center">Nguồn Sheet</th>
                 <th className="p-3.5 text-center">Trạng thái</th>
@@ -203,26 +200,11 @@ export function AdminStudentsClient({ initialStudents }: AdminStudentsClientProp
                   <td className="p-3.5 text-center text-slate-400 font-bold">{s.stt || idx + 1}</td>
                   <td className="p-3.5 font-bold text-slate-900 dark:text-white">{s.fullName}</td>
                   <td className="p-3.5 text-slate-600 dark:text-slate-400">{s.dateOfBirth || "--"}</td>
-                  <td className="p-3.5">
-                    {s.studySystem ? (
-                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold text-[11px]">
-                        {s.studySystem}
-                      </span>
-                    ) : (
-                      "--"
-                    )}
-                  </td>
                   {showPrivateInfo && (
                     <td className="p-3.5 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
                       {s.phone || "--"}
                     </td>
                   )}
-                  {showPrivateInfo && (
-                    <td className="p-3.5 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
-                      {s.cccd || "--"}
-                    </td>
-                  )}
-                  <td className="p-3.5 text-slate-500">{s.placeOfBirth || "--"}</td>
                   <td className="p-3.5 text-slate-500">{s.dateJoinedGroup || "--"}</td>
                   <td className="p-3.5 text-center">
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
@@ -285,20 +267,6 @@ export function AdminStudentsClient({ initialStudents }: AdminStudentsClientProp
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">
-                    Hệ học
-                  </label>
-                  <select
-                    value={studySystem}
-                    onChange={(e) => setStudySystem(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border text-xs"
-                  >
-                    <option value="CQ">Chính quy (CQ)</option>
-                    <option value="LT">Liên thông (LT)</option>
-                    <option value="VB2">Văn bằng 2 (VB2)</option>
-                  </select>
-                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -315,33 +283,9 @@ export function AdminStudentsClient({ initialStudents }: AdminStudentsClientProp
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">
-                    Số CCCD / CMND
-                  </label>
-                  <input
-                    type="text"
-                    value={cccd}
-                    onChange={(e) => setCccd(e.target.value)}
-                    placeholder="00109..."
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border text-xs font-mono"
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">
-                    Nơi sinh
-                  </label>
-                  <input
-                    type="text"
-                    value={placeOfBirth}
-                    onChange={(e) => setPlaceOfBirth(e.target.value)}
-                    placeholder="Hà Nội, Nam Định..."
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border text-xs"
-                  />
-                </div>
 
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-700 dark:text-slate-300">
