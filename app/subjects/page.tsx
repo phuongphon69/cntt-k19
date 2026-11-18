@@ -3,10 +3,17 @@ import React from "react";
 import Link from "next/link";
 import { BookOpen, User, Calendar, Percent, ChevronRight } from "lucide-react";
 import { getSubjects } from "@/lib/google-sheets/reader";
+import { hasStatsAccess } from "@/lib/auth/stats-access";
+import { StatsAccessGate } from "@/components/stats/stats-access-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function SubjectsPage() {
+  // Mục Môn học: chỉ quản trị viên hoặc người có mã do Lớp trưởng cấp mới xem được
+  if (!(await hasStatsAccess())) {
+    return <StatsAccessGate submitLabel="Xem môn học" hint="Để được xem môn học" />;
+  }
+
   const subjects = await getSubjects();
 
   return (

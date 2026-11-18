@@ -1,6 +1,7 @@
 // app/api/subjects/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSubjects, getAttendanceSheetData } from "@/lib/google-sheets/reader";
+import { hasStatsAccess } from "@/lib/auth/stats-access";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  if (!(await hasStatsAccess())) {
+    return NextResponse.json(
+      { success: false, error: "Cần mã xem do Lớp trưởng cấp" },
+      { status: 401 }
+    );
+  }
   try {
     const { id } = params;
     const subjects = await getSubjects();

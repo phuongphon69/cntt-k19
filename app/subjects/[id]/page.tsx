@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, BookOpen, User, Calendar, Percent } from "lucide-react";
 import { getSubjects, getAttendanceSheetData } from "@/lib/google-sheets/reader";
 import { MatrixTable } from "@/components/attendance/matrix-table";
+import { hasStatsAccess } from "@/lib/auth/stats-access";
+import { StatsAccessGate } from "@/components/stats/stats-access-gate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,6 +17,11 @@ interface SubjectDetailPageProps {
 
 export default async function SubjectDetailPage({ params }: SubjectDetailPageProps) {
   const { id } = params;
+  // Mục Môn học: chỉ quản trị viên hoặc người có mã do Lớp trưởng cấp mới xem được
+  if (!(await hasStatsAccess())) {
+    return <StatsAccessGate submitLabel="Xem môn học" hint="Để được xem môn học" />;
+  }
+
   const subjects = await getSubjects();
   const subject = subjects.find(
     (s) => s.id.toLowerCase() === id.toLowerCase() || s.code.toLowerCase() === id.toLowerCase()

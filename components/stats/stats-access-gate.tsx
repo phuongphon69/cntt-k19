@@ -8,7 +8,15 @@ import { KeyRound, Lock, Loader2, Phone } from "lucide-react";
 // Số điện thoại Lớp trưởng
 const MONITOR_PHONE = "0972521997";
 
-export function StatsAccessGate() {
+interface StatsAccessGateProps {
+  submitLabel?: string;
+  hint?: string;
+}
+
+export function StatsAccessGate({
+  submitLabel = "Xem thống kê",
+  hint = "Để được xem thống kê",
+}: StatsAccessGateProps) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -86,7 +94,7 @@ export function StatsAccessGate() {
               className="w-full pl-9 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-mono tracking-wider text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-          <p className="text-xs text-slate-500 text-center">Để được xem thống kê</p>
+          <p className="text-xs text-slate-500 text-center">{hint}</p>
 
           {error && (
             <div className="text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-xl px-3 py-2">
@@ -100,7 +108,7 @@ export function StatsAccessGate() {
             className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold transition-colors cursor-pointer"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            <span>Xem thống kê</span>
+            <span>{submitLabel}</span>
           </button>
         </form>
       </div>
