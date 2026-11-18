@@ -52,7 +52,7 @@ export default async function StudentDetailPage({ params }: StudentDetailPagePro
 
   const overallRate =
     grandRecordedSessions > 0
-      ? Math.round((grandTotalX / (grandRecordedSessions * 3)) * 100 * 10) / 10
+      ? Math.round((grandTotalX / grandRecordedSessions) * 100 * 10) / 10
       : 0;
 
   return (

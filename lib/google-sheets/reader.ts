@@ -1,5 +1,5 @@
 // lib/google-sheets/reader.ts
-import { getGoogleSheetsClient, getSpreadsheetId } from "./client";
+import { getGoogleSheetsClient, getSpreadsheetId, getDataSpreadsheetId } from "./client";
 import { getCached, setCached } from "./cache";
 import {
   Student,
@@ -9,9 +9,10 @@ import {
   Period,
   ZoomAlias,
   AttendanceConfig,
+  StudentAttendanceRecord,
 } from "@/types";
 import { normalizeVietnameseName, normalizeVietnameseNameWithoutAccent } from "@/lib/vietnamese/normalize";
-import { parseAttendanceSheet, ParsedAttendanceSheet } from "@/lib/attendance/parser";
+import { parseAttendanceSheet, parseSimpleAttendanceSheet, ParsedAttendanceSheet } from "@/lib/attendance/parser";
 import {
   getSessionOverride,
   getCustomSubjects,
@@ -25,8 +26,12 @@ import { DEFAULT_ATTENDANCE_CONFIG } from "@/lib/attendance/calculator";
 /**
  * Fetch raw matrix from a given sheet with caching and public gviz fallback
  */
-export async function fetchSheetMatrix(sheetName: string, forceFresh = false): Promise<any[][]> {
-  const spreadsheetId = getSpreadsheetId();
+export async function fetchSheetMatrix(
+  sheetName: string,
+  forceFresh = false,
+  spreadsheetIdOverride?: string
+): Promise<any[][]> {
+  const spreadsheetId = spreadsheetIdOverride || getSpreadsheetId();
   const cacheKey = `sheet_matrix_${spreadsheetId}_${sheetName}`;
   if (!forceFresh) {
     const cached = getCached<any[][]>(cacheKey);
@@ -109,8 +114,8 @@ export async function fetchSheetMatrix(sheetName: string, forceFresh = false): P
 /**
  * Fetch all available sheet names in workbook
  */
-export async function getWorkbookSheetNames(): Promise<string[]> {
-  const spreadsheetId = getSpreadsheetId();
+export async function getWorkbookSheetNames(spreadsheetIdOverride?: string): Promise<string[]> {
+  const spreadsheetId = spreadsheetIdOverride || getSpreadsheetId();
   const cacheKey = `sheet_names_${spreadsheetId}`;
   const cached = getCached<string[]>(cacheKey);
   if (cached) return cached;
@@ -187,7 +192,14 @@ export async function getStudents(): Promise<Student[]> {
   const cached = getCached<Student[]>(cacheKey);
   if (cached) return cached;
 
-  const rawMatrix = await fetchSheetMatrix("CNTT - K19");
+  // Nguồn chính: tab "danhsach" của sheet dữ liệu; dự phòng: tab "CNTT - K19" của sheet TKB
+  let rawMatrix = await fetchSheetMatrix("danhsach", false, getDataSpreadsheetId());
+  let isDataSheetRoster = rawMatrix.some((row) =>
+    String(row?.[1] || "").toUpperCase().includes("HỌ VÀ")
+  );
+  if (!isDataSheetRoster) {
+    rawMatrix = await fetchSheetMatrix("CNTT - K19");
+  }
   const students: Student[] = [];
 
   if (rawMatrix.length > 0) {
@@ -225,16 +237,16 @@ export async function getStudents(): Promise<Student[]> {
 
       const dob = String(row[3] || "").trim();
       // row[4] is Giới tính
-      const cccd = String(row[5] || "").trim();
-      const placeOfBirth = String(row[6] || "").trim();
+      const cccd = isDataSheetRoster ? "" : String(row[5] || "").trim();
+      const placeOfBirth = isDataSheetRoster ? "" : String(row[6] || "").trim();
       // row[7] is ĐÃ TỐT NGHIỆP VĂN BẰNG VÀ NGÀNH HỌC
       // row[8] is NGÀY THÁNG NĂM TỐT NGHIỆP
-      const phone = String(row[9] || "").trim();
+      const phone = isDataSheetRoster ? "" : String(row[9] || "").trim();
       // row[10] is NGÀNH ĐĂNG KÝ HỌC
-      const studySystem = String(row[11] || "").trim();
-      const dateJoined = String(row[12] || "").trim();
+      const studySystem = isDataSheetRoster ? "" : String(row[11] || "").trim();
+      const dateJoined = String((isDataSheetRoster ? row[5] : row[12]) || "").trim();
       // row[13] is Miền Bắc, row[14] is Miền Nam
-      const notes = String(row[15] || "").trim();
+      const notes = isDataSheetRoster ? "" : String(row[15] || "").trim();
 
       students.push({
         id: studentId,
@@ -252,7 +264,7 @@ export async function getStudents(): Promise<Student[]> {
         dateJoinedGroup: dateJoined,
         notes,
         active: true,
-        sourceSheet: "CNTT - K19",
+        sourceSheet: isDataSheetRoster ? "danhsach" : "CNTT - K19",
         sourceRow: r + 1,
       });
     }
@@ -320,7 +332,7 @@ export async function getStudents(): Promise<Student[]> {
         dateOfBirth: s.dob,
         dateJoinedGroup: s.dateJoined || "",
         active: true,
-        sourceSheet: "CNTT - K19",
+        sourceSheet: isDataSheetRoster ? "danhsach" : "CNTT - K19",
         sourceRow: s.stt + 3,
       });
     }
@@ -502,7 +514,7 @@ export async function getSubjects(): Promise<Subject[]> {
     const actuallyRecordedCount = parsed.sessions.filter((sess) =>
       parsed.records.some((rec) => {
         const s = rec.sessions[sess.date];
-        return s && s.isRecorded && (s.round1 || s.round2 || s.round3);
+        return s && s.isRecorded && s.round1;
       })
     ).length;
 
@@ -629,7 +641,24 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
     (s) => s.trim().toUpperCase() === sheetName.trim().toUpperCase()
   );
 
-  let matrix = sheetExists ? await fetchSheetMatrix(sheetName, forceFresh) : [];
+  // Ưu tiên tab của môn trong sheet dữ liệu (mỗi môn 1 tab, mỗi buổi 1 cột kết quả)
+  let dataTabParsed: ParsedAttendanceSheet | null = null;
+  try {
+    const dataSheetId = getDataSpreadsheetId();
+    const dataTabs = await getWorkbookSheetNames(dataSheetId);
+    const dataTab = dataTabs.find(
+      (t) =>
+        normalizeVietnameseNameWithoutAccent(t).toLowerCase().replace(/\s+/g, "_") === titleNorm
+    );
+    if (dataTab) {
+      const dataMatrix = await fetchSheetMatrix(dataTab, forceFresh, dataSheetId);
+      dataTabParsed = parseSimpleAttendanceSheet(sheetName, dataMatrix);
+    }
+  } catch (err) {
+    console.warn(`[data sheet] cannot read tab for ${sheetName}:`, err);
+  }
+
+  let matrix = !dataTabParsed && sheetExists ? await fetchSheetMatrix(sheetName, forceFresh) : [];
   if (matrix.length === 0) {
     const directMatrix = await fetchSheetMatrix(sheetName, forceFresh);
     const isTkbDefault =
@@ -639,7 +668,8 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
       matrix = directMatrix;
     }
   }
-  let parsed = parseAttendanceSheet(sheetName, matrix, tkbDates.length > 0 ? tkbDates : undefined);
+  let parsed =
+    dataTabParsed ?? parseAttendanceSheet(sheetName, matrix, tkbDates.length > 0 ? tkbDates : undefined);
 
   // If sheet doesn't exist on Google Sheets yet (e.g. newly discovered from TKB),
   // synthesize sessions from TKB schedule and records from active student roster
@@ -732,7 +762,9 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
   // 5. Overlay any confirmed attendance rounds from persistent sync-store
   const recordedRounds = getRecordedAttendanceRounds(sheetName);
   if (recordedRounds.length > 0) {
-    for (const entry of recordedRounds) {
+    // Lần 1 là kết quả chính của buổi: áp dụng sau cùng để ưu tiên hơn lần 2/3 (dữ liệu cũ)
+    const orderedRounds = [...recordedRounds].sort((a, b) => b.roundNumber - a.roundNumber);
+    for (const entry of orderedRounds) {
       const normEntryDate = (() => {
         const d = parseVNDate(entry.sessionDate);
         return d
@@ -785,9 +817,8 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
           const sessObj = rec.sessions[sessDateKey];
           // Only update if upd.value has an actual mark
           if (upd.value !== undefined && upd.value !== null && String(upd.value).trim().length > 0) {
-            if (entry.roundNumber === 1) sessObj.round1 = upd.value;
-            else if (entry.roundNumber === 2) sessObj.round2 = upd.value;
-            else if (entry.roundNumber === 3) sessObj.round3 = upd.value;
+            // Mỗi buổi chỉ có 1 kết quả: mọi lần ghi đều cập nhật vào round1
+            sessObj.round1 = upd.value;
             sessObj.isRecorded = true;
           }
           if (normEntryDate !== sessDateKey) {
@@ -807,7 +838,7 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
       for (const s of parsed.sessions) {
         const sess = rec.sessions[s.date];
         if (sess && sess.status !== "NOT_APPLICABLE") {
-          const rounds = [sess.round1, sess.round2, sess.round3];
+          const rounds = [sess.round1];
           let sessX = 0;
           for (const v of rounds) {
             const u = (v || "").toUpperCase();
@@ -817,8 +848,8 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
           }
           const hasAny = rounds.some((v) => !!v && v.trim().length > 0);
           sess.isRecorded = hasAny;
-          sess.rate = Math.round((sessX / 3) * 100 * 10) / 10;
-          sess.status = sessX >= 2 ? "PRESENT" : "ABSENT";
+          sess.rate = sessX >= 1 ? 100 : 0;
+          sess.status = sessX >= 1 ? "PRESENT" : "ABSENT";
           if (hasAny) {
             recordedSessions++;
           }
@@ -830,7 +861,7 @@ export async function getAttendanceSheetData(sheetName: string, forceFresh = fal
       rec.totalM = countM;
       rec.recordedSessions = recordedSessions;
       rec.attendanceRate =
-        recordedSessions > 0 ? Math.round((countX / (recordedSessions * 3)) * 100 * 10) / 10 : 100;
+        recordedSessions > 0 ? Math.round((countX / recordedSessions) * 100 * 10) / 10 : 100;
       rec.warning = rec.attendanceRate < 80;
     }
   }

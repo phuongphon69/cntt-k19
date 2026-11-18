@@ -6,50 +6,42 @@ import {
 } from "../lib/attendance/calculator";
 
 describe("Attendance Calculator Rules", () => {
-  it("computes 3/3 = 100% for X X X and counts as full attendance (tham gia học đầy đủ)", () => {
-    const res = calculateSessionAttendance("X", "X", "X");
-    expect(res.isRecorded).toBe(true);
-    expect(res.countX).toBe(3);
-    expect(res.rate).toBe(100);
-    expect(res.displayText).toBe("3/3");
-    expect(res.statusText).toBe("Có tham gia học đầy đủ");
-    expect(res.isFullAttendance).toBe(true);
-    expect(res.isAbsent).toBe(false);
-  });
-
-  it("computes 2/3 = 66.7% for X X M and counts as full attendance (tham gia học đầy đủ)", () => {
-    const res = calculateSessionAttendance("X", "X", "M");
-    expect(res.isRecorded).toBe(true);
-    expect(res.countX).toBe(2);
-    expect(res.countM).toBe(1);
-    expect(res.rate).toBe(66.7);
-    expect(res.displayText).toBe("2/3");
-    expect(res.statusText).toBe("Có tham gia học đầy đủ");
-    expect(res.isFullAttendance).toBe(true);
-    expect(res.isAbsent).toBe(false);
-  });
-
-  it("computes 1/3 = 33.3% for X P M and marks session as absent (vắng mặt)", () => {
-    const res = calculateSessionAttendance("X", "P", "M");
+  it("X = có mặt, tính 100% cho buổi đó (mỗi buổi chỉ 1 lần điểm danh)", () => {
+    const res = calculateSessionAttendance("X", "", "");
     expect(res.isRecorded).toBe(true);
     expect(res.countX).toBe(1);
-    expect(res.countP).toBe(1);
+    expect(res.rate).toBe(100);
+    expect(res.displayText).toBe("X");
+    expect(res.statusText).toBe("Có mặt");
+    expect(res.isFullAttendance).toBe(true);
+    expect(res.isAbsent).toBe(false);
+  });
+
+  it("M (muộn) không tính là có mặt, ghi nhận là đi muộn", () => {
+    const res = calculateSessionAttendance("M", "", "");
+    expect(res.isRecorded).toBe(true);
+    expect(res.countX).toBe(0);
     expect(res.countM).toBe(1);
-    expect(res.rate).toBe(33.3);
-    expect(res.displayText).toBe("1/3");
-    expect(res.statusText).toBe("Vắng mặt (1/3)");
-    expect(res.isFullAttendance).toBe(false);
+    expect(res.rate).toBe(0);
+    expect(res.statusText).toBe("Đi muộn");
     expect(res.isAbsent).toBe(true);
   });
 
-  it("treats 0/3 as absent (vắng mặt) displayed as -- for P P P", () => {
-    const res = calculateSessionAttendance("P", "P", "P");
+  it("P (phép) không tính là có mặt, ghi nhận là có phép", () => {
+    const res = calculateSessionAttendance("P", "", "");
+    expect(res.countP).toBe(1);
+    expect(res.rate).toBe(0);
+    expect(res.statusText).toBe("Có phép");
+    expect(res.isFullAttendance).toBe(false);
+  });
+
+  it("V = vắng mặt, hiển thị --", () => {
+    const res = calculateSessionAttendance("V", "", "");
     expect(res.isRecorded).toBe(true);
     expect(res.countX).toBe(0);
-    expect(res.countP).toBe(3);
     expect(res.rate).toBe(0);
     expect(res.displayText).toBe("--");
-    expect(res.statusText).toBe("Vắng mặt (0/3)");
+    expect(res.statusText).toBe("Vắng mặt");
     expect(res.isFullAttendance).toBe(false);
     expect(res.isAbsent).toBe(true);
   });
@@ -65,17 +57,17 @@ describe("Attendance Calculator Rules", () => {
 
   it("calculates overall subject attendance correctly excluding blank sessions", () => {
     const sessions = [
-      { date: "01/08/2026", round1: "X", round2: "X", round3: "X" }, // 3/3
-      { date: "03/08/2026", round1: "X", round2: "X", round3: "M" }, // 2/3
+      { date: "01/08/2026", round1: "X", round2: "", round3: "" }, // có mặt
+      { date: "03/08/2026", round1: "V", round2: "", round3: "" }, // vắng
       { date: "05/08/2026", round1: "", round2: "", round3: "" }, // unrecorded, skip!
     ];
 
     const subCalc = calculateSubjectAttendance(sessions);
     expect(subCalc.isApplicable).toBe(true);
     expect(subCalc.recordedSessions).toBe(2); // Only 2 sessions counted in denominator
-    expect(subCalc.totalX).toBe(5);
-    // 5 / (2 * 3) = 5/6 = 83.3%
-    expect(subCalc.attendanceRate).toBe(83.3);
+    expect(subCalc.totalX).toBe(1);
+    // 1 / 2 = 50%
+    expect(subCalc.attendanceRate).toBe(50);
   });
 
   it("returns Not Applicable (Không áp dụng) for students not in subject sheet (never absent)", () => {
@@ -112,7 +104,7 @@ describe("Attendance Calculator Rules", () => {
     const sessions = [
       { date: "10/06/2026", round1: "X", round2: "X", round3: "X" },
       { date: "12/06/2026", round1: "X", round2: "X", round3: "X" },
-      { date: "17/06/2026", round1: "X", round2: "X", round3: "" },
+      { date: "17/06/2026", round1: "V", round2: "", round3: "" },
     ];
 
     const subCalc = calculateSubjectAttendance(sessions, {
@@ -121,9 +113,9 @@ describe("Attendance Calculator Rules", () => {
 
     expect(subCalc.isApplicable).toBe(true);
     expect(subCalc.recordedSessions).toBe(3);
-    expect(subCalc.totalX).toBe(8); // 3 + 3 + 2 = 8
-    expect(subCalc.attendanceRate).toBe(88.9);
-    expect(subCalc.warning).toBe(false);
+    expect(subCalc.totalX).toBe(2); // 2 buổi có mặt trên 3 buổi
+    expect(subCalc.attendanceRate).toBe(66.7);
+    expect(subCalc.warning).toBe(true);
   });
 
   it("handles sessions spanning before and after join date properly", () => {
@@ -139,7 +131,7 @@ describe("Attendance Calculator Rules", () => {
 
     expect(subCalc.isApplicable).toBe(true);
     expect(subCalc.recordedSessions).toBe(2); // Only 2 sessions after join date
-    expect(subCalc.totalX).toBe(6);
+    expect(subCalc.totalX).toBe(2);
     expect(subCalc.attendanceRate).toBe(100);
     expect(subCalc.warning).toBe(false);
   });
@@ -225,38 +217,16 @@ describe("Attendance Calculator Rules", () => {
     expect(quanRec?.totalP).toBeGreaterThanOrEqual(1);
   }, 15000);
 
-  it("strictly enforces 0/3 is also absent (vắng mặt, displayed as --), 1/3 is absent, and >= 2/3 is full attendance", () => {
-    // 0/3 session: no X marks -> ALSO ABSENT
-    const sess0 = calculateSessionAttendance("V", "V", "V");
-    expect(sess0.displayText).toBe("--");
-    expect(sess0.statusText).toBe("Vắng mặt (0/3)");
-    expect(sess0.isRecorded).toBe(true);
-    expect(sess0.isFullAttendance).toBe(false);
-    expect(sess0.isAbsent).toBe(true);
+  it("mỗi buổi chỉ tính 1 lần: chỉ lần 1 được xét, lần 2/3 bị bỏ qua", () => {
+    const absent = calculateSessionAttendance("V", "X", "X");
+    expect(absent.countX).toBe(0);
+    expect(absent.statusText).toBe("Vắng mặt");
+    expect(absent.isAbsent).toBe(true);
 
-    // 1/3 session: only 1 X mark -> ABSENT
-    const sess1 = calculateSessionAttendance("X", "V", "V");
-    expect(sess1.displayText).toBe("1/3");
-    expect(sess1.statusText).toBe("Vắng mặt (1/3)");
-    expect(sess1.isRecorded).toBe(true);
-    expect(sess1.isFullAttendance).toBe(false);
-    expect(sess1.isAbsent).toBe(true);
-
-    // 2/3 session: 2 X marks -> FULL ATTENDANCE
-    const sess2 = calculateSessionAttendance("X", "X", "V");
-    expect(sess2.displayText).toBe("2/3");
-    expect(sess2.statusText).toBe("Có tham gia học đầy đủ");
-    expect(sess2.isRecorded).toBe(true);
-    expect(sess2.isFullAttendance).toBe(true);
-    expect(sess2.isAbsent).toBe(false);
-
-    // 3/3 session: 3 X marks -> FULL ATTENDANCE
-    const sess3 = calculateSessionAttendance("X", "X", "X");
-    expect(sess3.displayText).toBe("3/3");
-    expect(sess3.statusText).toBe("Có tham gia học đầy đủ");
-    expect(sess3.isRecorded).toBe(true);
-    expect(sess3.isFullAttendance).toBe(true);
-    expect(sess3.isAbsent).toBe(false);
+    const present = calculateSessionAttendance("X", "V", "V");
+    expect(present.countX).toBe(1);
+    expect(present.displayText).toBe("X");
+    expect(present.isFullAttendance).toBe(true);
   });
 
   it("supports editing student attendance results (sửa kết quả) and deleting attendance results (xóa kết quả)", async () => {
@@ -269,12 +239,12 @@ describe("Attendance Calculator Rules", () => {
     const sessionDate = "29/09/2026";
     const studentId = "nguyen_huy_phuong";
 
-    // 1. Edit attendance: set Round 1 = X, Round 2 = X, Round 3 = P
+    // 1. Edit attendance: kết quả buổi (lần 1) = X
     const editRes = await updateStudentAttendanceRounds(
       sheetName,
       sessionDate,
       studentId,
-      { round1: "X", round2: "X", round3: "P" },
+      { round1: "X" },
       "test_admin"
     );
     expect(editRes.success).toBe(true);
@@ -283,9 +253,7 @@ describe("Attendance Calculator Rules", () => {
     const studentAfterEdit = sheetDataAfterEdit.records.find((r) => r.studentId === studentId);
     expect(studentAfterEdit).toBeDefined();
     expect(studentAfterEdit?.sessions[sessionDate]?.round1).toBe("X");
-    expect(studentAfterEdit?.sessions[sessionDate]?.round2).toBe("X");
-    expect(studentAfterEdit?.sessions[sessionDate]?.round3).toBe("P");
-    expect(studentAfterEdit?.sessions[sessionDate]?.status).toBe("PRESENT"); // 2/3 -> PRESENT
+    expect(studentAfterEdit?.sessions[sessionDate]?.status).toBe("PRESENT"); // X -> PRESENT
 
     // 2. Clear attendance for single student (xóa kết quả học viên)
     const deleteStudentRes = await clearSessionAttendance(

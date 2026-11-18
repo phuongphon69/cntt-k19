@@ -152,7 +152,7 @@ export async function getComprehensiveAttendanceReport(): Promise<ComprehensiveA
         if (studentSess && studentSess.status !== "NOT_APPLICABLE") {
           recordedSessions++;
           let sessX = 0;
-          const rounds = [studentSess.round1, studentSess.round2, studentSess.round3];
+          const rounds = [studentSess.round1];
           for (const r of rounds) {
             const u = String(r || "").trim().toUpperCase();
             if (u === "X") {
@@ -161,15 +161,14 @@ export async function getComprehensiveAttendanceReport(): Promise<ComprehensiveA
             } else if (u === "P") countP++;
             else if (u === "M") countM++;
           }
-          // Tỷ lệ có mặt 2/3 trở lên được tính ngày đó có tham gia học đầy đủ
-          // Trường hợp 0/3 và 1/3 đều là vắng mặt (chỉ tăng attendedSessions khi sessX >= 2)
-          if (sessX >= 2) {
+          // Mỗi buổi tính 1 lần: có mặt (X) thì tính tham gia
+          if (sessX >= 1) {
             attendedSessions++;
           }
         }
       }
 
-      const totalSlots = recordedSessions * 3;
+      const totalSlots = recordedSessions;
       let rate = 0;
       let warning = false;
 

@@ -72,7 +72,7 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
   if (!data || !data.isOpen) return null;
 
   // Compute live statistics for current edit state
-  const editRounds = [r1, r2, r3];
+  const editRounds = [r1];
   let liveCountX = 0;
   let liveCountP = 0;
   let liveCountM = 0;
@@ -82,8 +82,8 @@ export function StudentDrawer({ data, onClose, onUpdated }: StudentDrawerProps) 
     else if (u === "P") liveCountP++;
     else if (u === "M") liveCountM++;
   });
-  const liveRate = Math.round((liveCountX / 3) * 100 * 10) / 10;
-  const isAllEmpty = !r1 && !r2 && !r3;
+  const liveRate = liveCountX >= 1 ? 100 : 0;
+  const isAllEmpty = !r1;
 
   const handleSaveEdit = async () => {
     if (!data.sheetName || !data.date || !data.studentId) {

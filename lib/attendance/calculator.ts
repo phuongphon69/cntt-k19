@@ -75,7 +75,8 @@ export function calculateSessionAttendance(
   const c2 = cleanAttendanceValue(r2);
   const c3 = cleanAttendanceValue(r3);
 
-  const rounds = [c1, c2, c3];
+  // Mỗi buổi chỉ tính 1 lần điểm danh (kết quả cuối cùng của buổi)
+  const rounds = [c1];
   const hasAnyValue = rounds.some((r) => r !== "");
 
   if (!hasAnyValue) {
@@ -117,22 +118,24 @@ export function calculateSessionAttendance(
       countM,
       rate: 0,
       displayText: "--",
-      statusText: "Vắng mặt (0/3)",
+      statusText: countP > 0 ? "Có phép" : countM > 0 ? "Đi muộn" : "Vắng mặt",
       isFullAttendance: false,
       isAbsent: true,
     };
   }
 
-  // Rate = numberOfX / 3 * 100
-  const rate = Math.round((countX / 3) * 100 * 10) / 10;
-  const isFullAttendance = countX >= 2;
-  const isAbsent = countX < 2;
+  // Mỗi buổi tính 1 lần: X = 100%, còn lại 0%
+  const rate = countX >= 1 ? 100 : 0;
+  const isFullAttendance = countX >= 1;
+  const isAbsent = countX < 1;
 
-  let statusText = "Vắng mặt (0/3)";
+  let statusText = "Vắng mặt";
   if (isFullAttendance) {
-    statusText = "Có tham gia học đầy đủ";
-  } else if (isAbsent) {
-    statusText = "Vắng mặt (1/3)";
+    statusText = "Có mặt";
+  } else if (countP > 0) {
+    statusText = "Có phép";
+  } else if (countM > 0) {
+    statusText = "Đi muộn";
   }
 
   return {
@@ -144,7 +147,7 @@ export function calculateSessionAttendance(
     countP,
     countM,
     rate,
-    displayText: `${countX}/3`,
+    displayText: countX >= 1 ? "X" : "--",
     statusText,
     isFullAttendance,
     isAbsent,
@@ -229,8 +232,8 @@ export function calculateSubjectAttendance(
     };
   }
 
-  // Formula: subjectRate = totalX / (recordedSessionCount * 3) * 100
-  const maxPossibleX = recordedSessions * 3;
+  // Formula: subjectRate = totalX / recordedSessionCount * 100 (mỗi buổi 1 lần)
+  const maxPossibleX = recordedSessions;
   const attendanceRate = Math.round((totalX / maxPossibleX) * 100 * 10) / 10;
   const warning = attendanceRate < config.warningThreshold;
 

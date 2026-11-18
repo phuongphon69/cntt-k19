@@ -299,7 +299,8 @@ export function parseAttendanceSheet(
         r3 = String(row[c + 2] || "").trim();
       }
 
-      const rounds = [r1, r2, r3];
+      // Mỗi buổi chỉ tính 1 lần (LẦN 1)
+      const rounds = [r1];
       const isRecorded = rounds.some((x) => x !== "");
       let countX = 0;
       let countP = 0;
@@ -329,13 +330,17 @@ export function parseAttendanceSheet(
       } else {
         // Tỷ lệ có mặt 2/3 trở lên được tính ngày đó có tham gia học đầy đủ
         // Trường hợp 0/3 và 1/3 đều là vắng mặt
-        const rate = Math.round((countX / 3) * 100 * 10) / 10;
+        const rate = countX >= 1 ? 100 : 0;
         let status: "PRESENT" | "EXCUSED" | "LATE" | "ABSENT" | "UNRECORDED" = "ABSENT";
         
-        if (countX >= 2) {
-          status = "PRESENT"; // Có tham gia học đầy đủ (2/3 hoặc 3/3)
+        if (countX >= 1) {
+          status = "PRESENT";
+        } else if (countP >= 1) {
+          status = "EXCUSED";
+        } else if (countM >= 1) {
+          status = "LATE";
         } else {
-          status = "ABSENT"; // Cả 0/3 và 1/3 đều là Vắng mặt
+          status = "ABSENT";
         }
 
         sessionsObj[sess.date] = {
@@ -401,6 +406,102 @@ export function parseAttendanceSheet(
     teacherName,
     totalSessions,
     sessions: sessionList,
+    records,
+    rawRowsCount: rawMatrix.length,
+    enrolledStudentsCount: records.length,
+  };
+}
+
+/**
+ * Parse tab điểm danh dạng đơn giản của sheet dữ liệu:
+ * hàng tiêu đề: STT | Họ và tên | Ngày sinh | Ngày vào lớp | <ngày 1> | <ngày 2> ... | Có mặt (X) | ...
+ * mỗi ô ngày chứa đúng 1 kết quả cho buổi đó: X / V / M / P (ô trống = chưa ghi nhận).
+ */
+export function parseSimpleAttendanceSheet(
+  sheetName: string,
+  rawMatrix: any[][]
+): ParsedAttendanceSheet | null {
+  if (!rawMatrix || rawMatrix.length < 2) return null;
+
+  let headerIdx = -1;
+  for (let r = 0; r < Math.min(5, rawMatrix.length); r++) {
+    const joined = (rawMatrix[r] || []).map((c: any) => String(c || "").toUpperCase()).join(" ");
+    if (joined.includes("HỌ VÀ TÊN") && joined.includes("NGÀY SINH")) {
+      headerIdx = r;
+      break;
+    }
+  }
+  if (headerIdx === -1) return null;
+
+  const header = rawMatrix[headerIdx] || [];
+  const dateCols: { col: number; date: string }[] = [];
+  for (let c = 4; c < header.length; c++) {
+    const d = parseVNDate(String(header[c] || "").trim());
+    if (!d) continue;
+    const date = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+    dateCols.push({ col: c, date });
+  }
+  if (dateCols.length === 0) return null;
+
+  const sessions = dateCols.map((d, i) => ({ index: i + 1, date: d.date, colStart: d.col }));
+  const records: StudentAttendanceRecord[] = [];
+
+  for (let r = headerIdx + 1; r < rawMatrix.length; r++) {
+    const row = rawMatrix[r];
+    const rawName = String(row?.[1] || "").trim();
+    if (!rawName || rawName.toUpperCase().includes("TỔNG")) continue;
+
+    const dateJoined = String(row[3] || "").trim();
+    const joinDate = parseVNDate(dateJoined);
+    const sessionsObj: StudentAttendanceRecord["sessions"] = {};
+    const calcInput: { date: string; round1: AttendanceValue; round2: AttendanceValue; round3: AttendanceValue }[] = [];
+
+    for (const s of sessions) {
+      const v = String(row[s.colStart] || "").trim().toUpperCase() as AttendanceValue;
+      const isRecorded = v !== "";
+      const sessDate = parseVNDate(s.date);
+      const beforeJoin = !!joinDate && !!sessDate && joinDate.getTime() > sessDate.getTime();
+
+      if (beforeJoin && v !== "X" && v !== "P" && v !== "M") {
+        sessionsObj[s.date] = {
+          round1: "", round2: "", round3: "", rate: 0, isRecorded: false, status: "NOT_APPLICABLE",
+        };
+      } else {
+        const status: "PRESENT" | "EXCUSED" | "LATE" | "ABSENT" | "UNRECORDED" = !isRecorded
+          ? "UNRECORDED"
+          : v === "X" ? "PRESENT" : v === "P" ? "EXCUSED" : v === "M" ? "LATE" : "ABSENT";
+        sessionsObj[s.date] = { round1: v, round2: "", round3: "", rate: v === "X" ? 100 : 0, isRecorded, status };
+        calcInput.push({ date: s.date, round1: v, round2: "", round3: "" });
+      }
+    }
+
+    const calc = calculateSubjectAttendance(calcInput, { dateJoinedGroup: dateJoined, isStudentInSubject: true });
+    const missedLateJoinCount = Object.values(sessionsObj).filter((x) => x.status === "NOT_APPLICABLE").length;
+
+    records.push({
+      studentId: normalizeVietnameseNameWithoutAccent(rawName).replace(/\s+/g, "_"),
+      studentName: normalizeVietnameseName(rawName),
+      dateOfBirth: String(row[2] || "").trim(),
+      studySystem: "",
+      dateJoinedGroup: dateJoined,
+      isApplicable: calc.isApplicable,
+      missedLateJoinCount,
+      sessions: sessionsObj,
+      totalX: calc.totalX,
+      totalP: calc.totalP,
+      totalM: calc.totalM,
+      recordedSessions: calc.recordedSessions,
+      attendanceRate: calc.attendanceRate,
+      warning: calc.warning,
+    });
+  }
+
+  return {
+    sheetName,
+    subjectName: sheetName.replace(/^DD\s+/i, "").trim(),
+    teacherName: "",
+    totalSessions: sessions.length,
+    sessions,
     records,
     rawRowsCount: rawMatrix.length,
     enrolledStudentsCount: records.length,

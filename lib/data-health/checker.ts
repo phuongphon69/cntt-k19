@@ -75,7 +75,7 @@ export async function checkDataHealth(): Promise<DataHealthReport> {
     // Check invalid values in attendance cells
     for (const rec of parsed.records) {
       for (const [date, sess] of Object.entries(rec.sessions)) {
-        const rounds = [sess.round1, sess.round2, sess.round3];
+        const rounds = [sess.round1];
         for (let i = 0; i < rounds.length; i++) {
           const val = String(rounds[i] || "").trim().toUpperCase();
           if (val && !["X", "P", "M", "V", "K"].includes(val)) {

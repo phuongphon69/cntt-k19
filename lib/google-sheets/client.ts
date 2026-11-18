@@ -3,6 +3,14 @@ import { google } from "googleapis";
 
 export const DEFAULT_SPREADSHEET_ID = "1nXlSGJq9DlsHsf4YFkw4ZiqQpZ2y8b4_h_EiHbhX9ec";
 
+// Sheet dữ liệu: danh sách học viên (tab "danhsach") + kết quả điểm danh theo từng môn (mỗi môn 1 tab)
+export const DEFAULT_DATA_SPREADSHEET_ID = "1r_u9nuQKJ-Jgz_xAk7vdrwGcJrNL9eA1nAQv-CUP4L0";
+
+export function getDataSpreadsheetId(): string {
+  return process.env.GOOGLE_DATA_SHEET_ID || DEFAULT_DATA_SPREADSHEET_ID;
+}
+
+// Sheet thời khóa biểu (tab "TKB")
 export function getSpreadsheetId(): string {
   return process.env.GOOGLE_SHEET_ID || DEFAULT_SPREADSHEET_ID;
 }

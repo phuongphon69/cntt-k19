@@ -371,7 +371,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
                         );
                       }
 
-                      const rounds = [sessionRecord?.round1, sessionRecord?.round2, sessionRecord?.round3];
+                      const rounds = [sessionRecord?.round1];
                       const countX = rounds.filter((x) => (x || "").toUpperCase() === "X").length;
                       const hasMarks = rounds.some((x) => x && String(x).trim().length > 0);
                       const isUnrecorded = !sessionRecord?.isRecorded && !hasMarks;
@@ -379,14 +379,14 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
                       const countText = isUnrecorded
                         ? "--"
                         : countX > 0
-                        ? `${countX}/3`
+                        ? "X"
                         : rounds.some((x) => (x || "").toUpperCase() === "P")
                         ? "P"
                         : rounds.some((x) => (x || "").toUpperCase() === "M")
                         ? "M"
-                        : "0/3";
+                        : "V";
 
-                      const rate = sessionRecord?.rate ?? (countX > 0 ? Math.round((countX / 3) * 100 * 10) / 10 : 0);
+                      const rate = sessionRecord?.rate ?? (countX > 0 ? 100 : 0);
 
                       return (
                         <td
