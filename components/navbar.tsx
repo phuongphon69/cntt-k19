@@ -249,6 +249,14 @@ export function Navbar() {
                 <Shield className="w-3.5 h-3.5" />
                 <span>Khu vực Quản trị</span>
               </Link>
+              <Link
+                href="/huong-dan"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="col-span-2 flex items-center justify-center gap-1.5 p-2.5 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Hướng dẫn sử dụng</span>
+              </Link>
             </div>
           </div>
         )}

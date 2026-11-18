@@ -1,7 +1,7 @@
 // components/footer.tsx
 import React from "react";
 import Link from "next/link";
-import { GraduationCap, ShieldCheck, Heart } from "lucide-react";
+import { GraduationCap, ShieldCheck, Heart, BookOpenText } from "lucide-react";
 
 export function Footer() {
   return (
@@ -16,7 +16,15 @@ export function Footer() {
           <span>Hệ thống Điểm danh & Thời khóa biểu</span>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+          <Link
+            href="/huong-dan"
+            className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+          >
+            <BookOpenText className="w-3.5 h-3.5" />
+            <span>Hướng dẫn sử dụng</span>
+          </Link>
+          <span>•</span>
           <Link
             href="/admin"
             className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
