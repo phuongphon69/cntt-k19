@@ -3,10 +3,17 @@ import React from "react";
 import { BarChart3 } from "lucide-react";
 import { getComprehensiveAttendanceReport } from "@/lib/attendance/stats";
 import { StatsDashboardClient } from "@/components/stats/stats-dashboard-client";
+import { StatsAccessGate } from "@/components/stats/stats-access-gate";
+import { hasStatsAccess } from "@/lib/auth/stats-access";
 
 export const dynamic = "force-dynamic";
 
 export default async function StatsPage() {
+  // Chỉ Quản trị viên hoặc người có mã do Lớp trưởng cấp mới xem được thống kê
+  if (!(await hasStatsAccess())) {
+    return <StatsAccessGate />;
+  }
+
   const report = await getComprehensiveAttendanceReport();
 
   return (
