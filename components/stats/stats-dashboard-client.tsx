@@ -20,9 +20,11 @@ import {
   AlertCircle,
   Hash,
   Percent,
+  FileText,
 } from "lucide-react";
 import { ComprehensiveAttendanceReport, StudentComprehensiveStat, SubjectClassStat } from "@/lib/attendance/stats";
 import { normalizeVietnameseNameWithoutAccent } from "@/lib/vietnamese/normalize";
+import { StatsPdfPreview } from "./stats-pdf-preview";
 
 interface StatsDashboardClientProps {
   report: ComprehensiveAttendanceReport;
@@ -34,6 +36,7 @@ export function StatsDashboardClient({ report }: StatsDashboardClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"STT" | "RATE_DESC" | "RATE_ASC">("STT");
   const [displayMode, setDisplayMode] = useState<"fraction" | "percent">("fraction");
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   const cleanQ = normalizeVietnameseNameWithoutAccent(searchQuery);
 
@@ -327,6 +330,16 @@ export function StatsDashboardClient({ report }: StatsDashboardClientProps) {
               </button>
             </div>
 
+            {/* Xem nhanh PDF / xuất file */}
+            <button
+              type="button"
+              onClick={() => setShowPdfPreview(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Xem nhanh PDF</span>
+            </button>
+
             {/* Sort Options */}
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border text-xs">
               <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
@@ -351,7 +364,6 @@ export function StatsDashboardClient({ report }: StatsDashboardClientProps) {
                 <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
                   <th className="p-3.5 text-center w-12">STT</th>
                   <th className="p-3.5">Học sinh</th>
-                  <th className="p-3.5">Hệ học</th>
                   {selectedSubjectId === "ALL" ? (
                     <>
                       {report.subjectStats.map((sub) => (
@@ -408,12 +420,6 @@ export function StatsDashboardClient({ report }: StatsDashboardClientProps) {
                               </div>
                             )}
                           </div>
-                        </td>
-
-                        <td className="p-3.5">
-                          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold text-[10px]">
-                            {s.student.studySystem || "CQ"}
-                          </span>
                         </td>
 
                         {selectedSubjectId === "ALL" ? (
@@ -548,6 +554,23 @@ export function StatsDashboardClient({ report }: StatsDashboardClientProps) {
           </div>
         </div>
       </div>
+      {showPdfPreview && (
+        <StatsPdfPreview
+          report={report}
+          students={filteredStudents}
+          selectedSubjectId={selectedSubjectId}
+          displayMode={displayMode}
+          filterLabel={
+            [
+              statusFilter === "GOOD" ? "≥ 80% (Tốt)" : statusFilter === "WARNING" ? "< 80% (Cảnh báo)" : "Tất cả",
+              searchQuery ? `tìm "${searchQuery}"` : "",
+            ]
+              .filter(Boolean)
+              .join(", ")
+          }
+          onClose={() => setShowPdfPreview(false)}
+        />
+      )}
     </div>
   );
 }
