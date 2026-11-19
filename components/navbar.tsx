@@ -263,7 +263,7 @@ export function Navbar() {
       </header>
 
       {/* Mobile Bottom Navigation Bar for Mobile-First Experience */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 flex items-center justify-around">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] flex items-center justify-around shadow-[0_-4px_12px_rgba(0,0,0,0.06)] [transform:translateZ(0)]">
         {navLinks.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));

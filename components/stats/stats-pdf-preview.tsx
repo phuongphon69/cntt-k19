@@ -1,7 +1,8 @@
 // components/stats/stats-pdf-preview.tsx
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Download, FileText } from "lucide-react";
 import { ComprehensiveAttendanceReport, StudentComprehensiveStat } from "@/lib/attendance/stats";
 
@@ -38,6 +39,9 @@ export function StatsPdfPreview({
     : "Thống kê chuyên cần tất cả các môn";
   const today = new Date().toLocaleDateString("vi-VN");
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -60,15 +64,19 @@ export function StatsPdfPreview({
 
   const cell = (value: string | number) => (value === "" ? "--" : value);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-sm overflow-y-auto stats-pdf-overlay">
       <style>{`
         @page { size: A4 landscape; margin: 10mm; }
         @media print {
-          body * { visibility: hidden !important; }
-          #stats-pdf-area, #stats-pdf-area * { visibility: visible !important; }
-          .stats-pdf-overlay { position: static !important; overflow: visible !important; background: #fff !important; }
-          #stats-pdf-area { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+          /* Ẩn toàn bộ trang web, chỉ giữ lại vùng danh sách (portal gắn trực tiếp vào body) */
+          body > *:not(.stats-pdf-overlay) { display: none !important; }
+          html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+          .stats-pdf-overlay { position: static !important; inset: auto !important; overflow: visible !important; background: #fff !important; backdrop-filter: none !important; }
+          .stats-pdf-overlay > div { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+          #stats-pdf-area { width: 100%; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
           .stats-pdf-hide-print { display: none !important; }
           #stats-pdf-area thead { display: table-header-group; }
           #stats-pdf-area tr { page-break-inside: avoid; }
@@ -231,6 +239,7 @@ export function StatsPdfPreview({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

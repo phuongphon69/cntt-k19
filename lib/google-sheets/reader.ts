@@ -1,6 +1,6 @@
 // lib/google-sheets/reader.ts
 import { getGoogleSheetsClient, getSpreadsheetId, getDataSpreadsheetId, getLegacySpreadsheetId } from "./client";
-import { getCached, setCached } from "./cache";
+import { getCached, setCached, swr } from "./cache";
 import {
   Student,
   PublicStudent,
@@ -97,7 +97,7 @@ async function getSheetGidMap(spreadsheetId: string): Promise<Map<string, string
   } catch (err) {
     console.warn("Failed to read sheet gids:", err);
   }
-  if (map.size > 0) setCached(cacheKey, Array.from(map.entries()));
+  if (map.size > 0) setCached(cacheKey, Array.from(map.entries()), 10 * 60 * 1000);
   return map;
 }
 
@@ -105,6 +105,20 @@ async function getSheetGidMap(spreadsheetId: string): Promise<Map<string, string
  * Fetch raw matrix from a given sheet with caching and public gviz fallback
  */
 export async function fetchSheetMatrix(
+  sheetName: string,
+  forceFresh = false,
+  spreadsheetIdOverride?: string
+): Promise<any[][]> {
+  const sid = spreadsheetIdOverride || getSpreadsheetId();
+  // Trả ngay dữ liệu đã có, làm mới ngầm; gộp các request đồng thời thành một lần tải
+  return swr(
+    `matrix_${sid}_${sheetName}`,
+    () => fetchSheetMatrixRaw(sheetName, true, spreadsheetIdOverride),
+    { forceFresh, isValid: (m) => m.length > 0 }
+  );
+}
+
+async function fetchSheetMatrixRaw(
   sheetName: string,
   forceFresh = false,
   spreadsheetIdOverride?: string
