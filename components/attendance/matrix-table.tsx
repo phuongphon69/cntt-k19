@@ -38,6 +38,7 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
   const [deletingSession, setDeletingSession] = useState(false);
   const [sessionDeleteMsg, setSessionDeleteMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const cleanQ = normalizeVietnameseNameWithoutAccent(searchQuery);
 
@@ -61,6 +62,31 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
   }
 
   const totalClassStudents = attendanceData.totalClassStudents || subject.totalClassStudents || 43;
+
+  const handleSync = async () => {
+    setIsRefreshing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/subjects/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetName: subject.attendanceSheet }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Đồng bộ thất bại");
+      router.refresh();
+      setSyncMsg({
+        type: "success",
+        text: json.throttled
+          ? "Vừa đồng bộ xong, dữ liệu đang là mới nhất."
+          : `Đã đồng bộ từ Google Sheet: ${json.students} học viên, ${json.sessions} buổi.`,
+      });
+    } catch (e: any) {
+      setSyncMsg({ type: "error", text: e.message || "Đồng bộ thất bại" });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleCellClick = (record: StudentAttendanceRecord, date: string) => {
     const sess = record.sessions[date];
@@ -197,16 +223,13 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
 
           <button
             type="button"
-            onClick={() => {
-              setIsRefreshing(true);
-              router.refresh();
-              setTimeout(() => setIsRefreshing(false), 800);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-xs transition-all cursor-pointer"
-            title="Lấy dữ liệu mới nhất từ Google Sheets"
+            disabled={isRefreshing}
+            onClick={handleSync}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-xs transition-all cursor-pointer disabled:opacity-60"
+            title="Đồng bộ kết quả điểm danh mới nhất từ Google Sheet"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-indigo-600" : ""}`} />
-            <span>Tải lại</span>
+            <span>{isRefreshing ? "Đang đồng bộ..." : "Đồng bộ Google Sheet"}</span>
           </button>
 
           <Link
@@ -222,6 +245,19 @@ export function MatrixTable({ subject, attendanceData }: MatrixTableProps) {
           </div>
         </div>
       </div>
+
+      {syncMsg && (
+        <div
+          className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+            syncMsg.type === "success"
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900"
+              : "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900"
+          }`}
+        >
+          {syncMsg.type === "success" ? <Check className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+          <span>{syncMsg.text}</span>
+        </div>
+      )}
 
       {/* Guide Note & Mobile Swipe Hint */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs border border-indigo-100 dark:border-indigo-900/60">
